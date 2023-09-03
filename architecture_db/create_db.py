@@ -33,7 +33,7 @@ systems={'Reactor Building':['Reactor Building Structure',
                             'Deck Cooling and Insulation',
                             'Deck Shielding',
                             'Deck Support Structure',
-                            'In service inspection'
+                            'In service inspection',
                             'Off gas management system'],
         'Fuel Handling System':['Fuel Handling Machine',
                                 'Gripper',
@@ -70,6 +70,7 @@ systems={'Reactor Building':['Reactor Building Structure',
                                     'Inert Gas Storage',
                                     'Chemistry Control System',
                                     'Inventory Management System']},
+        'Steam Supply System':['Primary Circulator','Steam Generator','Pressure Control and Relief Systems','Primary System Isolation','Shutdown Cooling Helium System'],
         'I&C Systems':['Reactor Protection System',
                         'Plant Control System',
                         'Main Control Room',
@@ -91,7 +92,7 @@ systems={'Reactor Building':['Reactor Building Structure',
                         'Primary Pump',
                         'Cross Duct',
                         'Primary HX',
-                        'Primary Circulator'],
+                        'Control Drums'],
          'Electrical Systems':['Plant AC',
                         'Essential AC',
                         'Essential DC',
@@ -133,6 +134,9 @@ systems={'Reactor Building':['Reactor Building Structure',
                         'Sodium/water reaction protection']
          }
 
+
+systems['Coolant Auxilliary Systems']['MHTGR']=systems['Coolant Auxilliary Systems']['HTR']
+
 """DECISIONS!
 - HTR/SFR/MSR/FHR
 - Size
@@ -147,24 +151,23 @@ systems={'Reactor Building':['Reactor Building Structure',
 
 #TODO: As we add the systems, define which reactors the systems go in? Then we can propagate system information through each of the three reactors
 
-reactor_types=['SFR','HTR','MSR']
+reactor_types=['SFR','HTR','MSR','MHTGR']
 
 excluded_systems={}
 
 for reactor_type in reactor_types:
     excluded_systems[reactor_type]=['Intermediate Loop','Brayton Power Conversion System']
 
-excluded_systems['SFR']+=['Fuel Topup System','Off gas management system','Cross Duct','Primary Circulator']
-excluded_systems['HTR']+=['Off gas management system','Guard Vessel','In-vessel storage','Primary Pump']
-excluded_systems['MSR']+=['Fuel Topup System','Guard Vessel','In-vessel storage','Cross Duct','Primary Circulator']
+excluded_systems['SFR']+=['Fuel Topup System','Burnup Measurement System','Off gas management system','Cross Duct','Steam Supply System','Control Drums']
+excluded_systems['HTR']+=['Off gas management system','Guard Vessel','In-vessel storage','Steam Supply System','Control Drums']
+excluded_systems['MSR']+=['Fuel Topup System','Burnup Measurement System','Guard Vessel','In-vessel storage','Cross Duct','Steam Supply System','Control Drums']
+excluded_systems['MHTGR']+=['Fuel Topup System','Burnup Measurement System','Off gas management system','Guard Vessel','In-vessel storage','Primary Pump','Thermal Energy Storage','Primary HX']
 
 
 for reactor_type in reactor_types:
     
     reactor=Reactor(name=reactor_type)
     session.add(reactor)
-    
-    excluded_systems[reactor_type]=['Intermediate Loop','Brayton Power Conversion System']
 
     for system_name in systems.keys():
         # Create a parent system
@@ -201,6 +204,7 @@ for this_system in these_systems: #havent figured out how to do this by query. D
 session.add(requirement)
 session.commit()
 
+#TODO! this bit isnt reactor specific and it needs to be
 
 interface_pairs=[('Reactor Building','Seismic Isolation System'),
                  ('Reactor Building','Plant Auxilliary Systems'),
@@ -212,6 +216,9 @@ interface_pairs=[('Reactor Building','Seismic Isolation System'),
                  ('Reactor Building','Decay Heat Removal Systems'),
                  ('Reactor Pressure Vessel','Thermal Energy Storage'),
                  ('Thermal Energy Storage','Rankine Power Conversion System'),
+                 ('Steam Supply System','Rankine Power Conversion System'),
+                 ('Cross Duct','Steam Supply System'),
+                 ('Reactor Building','Steam Supply System'),
                  ('Rankine Power Conversion System','Electrical Systems'),
                  ('Electrical Systems','Civils/Misc')]
 

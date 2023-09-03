@@ -21,7 +21,7 @@ session = Session()
 
 
 
-for reactor_name in ['SFR','HTR','MSR']:
+for reactor_name in ['SFR','HTR','MSR','MHTGR']:
     
     graph = graphviz.Digraph(engine='fdp') #'sfdp'
     graph.graph_attr['splines'] = 'true'
@@ -34,7 +34,7 @@ for reactor_name in ['SFR','HTR','MSR']:
         graph.node(system.name,shape='rectangle')
         
         for subsystem in system.children:
-            graph.node(subsystem.name,shape='rectangle')
+            graph.node(subsystem.name,shape='rectangle',color=colors[4])
             graph.edge(system.name,subsystem.name,color=colors[0])
             reactor_system_list.append(subsystem.name)
         
@@ -53,6 +53,6 @@ for reactor_name in ['SFR','HTR','MSR']:
                 break 
             
         if flag:
-            graph.edge(system_names[0],system_names[1],constraint='false',color=colors[1])
+            graph.edge(system_names[0],system_names[1],constraint='false',color=colors[2])
     
     graph.render('diagram_'+reactor_name,format='png')
