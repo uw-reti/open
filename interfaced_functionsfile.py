@@ -1,0 +1,852 @@
+import csv
+import os
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+import numpy as np
+
+
+class PDSystems:
+    def __init__(
+        self,
+        operating_time,
+        design_time,
+        build_time,
+        commission_time,
+        design_cost,
+        build_cost,
+        OM_per_year,
+        revenue_per_year,
+        discount_rate,
+        contingency,
+        profit_margin,
+        percent_design,
+        percent_build,
+        percent_OM_to,
+        percent_revenue_to,
+        actual_design_progress,
+        actual_build_progress,
+        target_design_progress=None,
+        target_build_progress=None,
+        actors=None,
+    ):
+        self.operating_time = int(operating_time)
+        self.design_time = int(design_time)
+        self.build_time = int(build_time)
+        self.commission_time = int(commission_time)
+
+        self.design_cost = float(design_cost)
+        self.build_cost = float(build_cost)
+        self.OM_per_year = float(OM_per_year)
+        self.revenue_per_year = float(revenue_per_year)
+        self.discount_rate = float(discount_rate)
+        self.contingency = float(contingency)
+        self.profit_margin = float(profit_margin)
+
+        self.percent_design = dict(percent_design)
+        self.percent_build = dict(percent_build)
+        self.percent_OM_to = dict(percent_OM_to)
+        self.percent_revenue_to = dict(percent_revenue_to)
+
+        self.actual_design_progress = np.asarray(actual_design_progress, dtype=float)
+        self.actual_build_progress = np.asarray(actual_build_progress, dtype=float)
+
+        if target_design_progress is None or len(target_design_progress) == 0:
+            self.target_design_progress = np.asarray(actual_design_progress, dtype=float)
+        else:
+            self.target_design_progress = np.asarray(target_design_progress, dtype=float)
+
+        if target_build_progress is None or len(target_build_progress) == 0:
+            self.target_build_progress = np.asarray(actual_build_progress, dtype=float)
+        else:
+            self.target_build_progress = np.asarray(target_build_progress, dtype=float)
+
+        if actors is None:
+            actor_keys = set()
+            actor_keys.update(self.percent_design.keys())
+            actor_keys.update(self.percent_build.keys())
+            actor_keys.update(self.percent_OM_to.keys())
+            actor_keys.update(self.percent_revenue_to.keys())
+            actor_keys.add("utility")
+            self.actors = sorted(actor_keys)
+        else:
+            self.actors = list(actors)
+            if "utility" not in self.actors:
+                self.actors.append("utility")
+
+        self.total_years = (
+            self.design_time
+            + self.build_time
+            + self.commission_time
+            + self.operating_time
+        )
+        self.year = np.arange(self.total_years, dtype=int)
+
+    def completion_index(self, progress_array):
+        idx = np.where(np.asarray(progress_array) >= 100)[0]
+        return int(idx[0]) if idx.size > 0 else None
+
+    def map_sample_to_phase_year(self, i, n_samples, phase_start, phase_length):
+        if n_samples <= 0:
+            raise ValueError("n_samples must be > 0")
+        if phase_length <= 0:
+            return phase_start
+
+        frac = (i + 1) / n_samples
+        year_within = int(np.ceil(frac * phase_length)) - 1
+        year_within = max(0, min(phase_length - 1, year_within))
+        return phase_start + year_within
+
+    def _completion_payout_year(self, progress_array, phase_start=0, phase_length=None):
+        idx = self.completion_index(progress_array)
+        if idx is None:
+            return None
+
+        n_samples = len(progress_array)
+        if phase_length is None:
+            phase_length = n_samples
+
+        return self.map_sample_to_phase_year(idx, n_samples, phase_start, phase_length)
+
+    def build_completion_payout_year(self, actual_build_progress=None):
+        if actual_build_progress is None:
+            actual_build_progress = self.actual_build_progress
+
+        return self._completion_payout_year(
+            actual_build_progress,
+            phase_start=self.design_time,
+            phase_length=self.build_time,
+        )
+
+    def _discount(self, arr):
+        arr = np.asarray(arr, dtype=float)
+        return arr / ((1.0 + self.discount_rate) ** self.year)
+
+    def _empty_actor_dict(self):
+        return {actor: np.zeros_like(self.year, dtype=float) for actor in self.actors}
+
+    def _progress_deltas(self, progress_array):
+        progress_array = np.asarray(progress_array, dtype=float)
+        cum = progress_array / 100.0
+        return np.diff(np.concatenate(([0.0], cum)))
+
+    def _distribute_progress_amounts(
+        self,
+        progress_array,
+        phase_cost,
+        phase_start,
+        phase_length,
+        shares,
+    ):
+        n_samples = len(progress_array)
+        deltas = self._progress_deltas(progress_array)
+        result = self._empty_actor_dict()
+
+        for i in range(n_samples):
+            pay_year = self.map_sample_to_phase_year(
+                i, n_samples, phase_start, phase_length
+            )
+            if pay_year >= len(self.year):
+                continue
+
+            for actor in self.actors:
+                share = shares.get(actor, 0.0)
+                result[actor][pay_year] += deltas[i] * phase_cost * share
+
+        return result
+
+    def _actual_phase_lengths(self):
+        actual_design_payout_year = self._completion_payout_year(
+            self.actual_design_progress,
+            phase_start=0,
+            phase_length=self.design_time,
+        )
+        actual_build_payout_year = self._completion_payout_year(
+            self.actual_build_progress,
+            phase_start=self.design_time,
+            phase_length=self.build_time,
+        )
+
+        if actual_design_payout_year is None:
+            actual_design_payout_year = self.design_time - 1
+        if actual_build_payout_year is None:
+            actual_build_payout_year = self.design_time + self.build_time - 1
+
+        actual_design_time = max(1, actual_design_payout_year + 1)
+        actual_build_time = max(1, actual_build_payout_year - actual_design_payout_year)
+
+        return (
+            actual_design_payout_year,
+            actual_build_payout_year,
+            actual_design_time,
+            actual_build_time,
+        )
+
+    def fixed_price(self):
+        nondisc_costs = self._empty_actor_dict()
+        disc_costs = self._empty_actor_dict()
+        nondisc_revenue = self._empty_actor_dict()
+        disc_revenue = self._empty_actor_dict()
+        net_disc = self._empty_actor_dict()
+        npv_timepath = self._empty_actor_dict()
+        npv = {}
+
+        (
+            actual_design_payout_year,
+            actual_build_payout_year,
+            actual_design_time,
+            actual_build_time,
+        ) = self._actual_phase_lengths()
+
+        target_design_payout_year = self._completion_payout_year(
+            self.target_design_progress,
+            phase_start=0,
+            phase_length=self.design_time,
+        )
+        target_build_payout_year = self._completion_payout_year(
+            self.target_build_progress,
+            phase_start=self.design_time,
+            phase_length=self.build_time,
+        )
+
+        if target_design_payout_year is None:
+            target_design_payout_year = self.design_time - 1
+        if target_build_payout_year is None:
+            target_build_payout_year = self.design_time + self.build_time - 1
+
+        design_payout_year = actual_design_payout_year
+        build_payout_year = actual_build_payout_year
+
+        mask_design = self.year < actual_design_time
+        mask_build = (self.year >= actual_design_time) & (
+            self.year < actual_design_time + actual_build_time
+        )
+        mask_om = self.year >= (actual_design_time + actual_build_time)
+
+        for actor in self.actors:
+            nondisc_costs[actor][mask_design] = (
+                self.design_cost / actual_design_time
+            ) * self.percent_design.get(actor, 0.0)
+
+            nondisc_costs[actor][mask_build] = (
+                self.build_cost / actual_build_time
+            ) * self.percent_build.get(actor, 0.0)
+
+            nondisc_costs[actor][mask_om] = (
+                self.OM_per_year * self.percent_OM_to.get(actor, 0.0)
+            )
+
+            disc_costs[actor] = self._discount(nondisc_costs[actor])
+
+            design_payout_amount = (
+                np.sum(disc_costs[actor][mask_design])
+                * (1.0 + self.contingency)
+                * (1.0 + self.profit_margin)
+                * ((1.0 + self.discount_rate) ** target_design_payout_year)
+            )
+
+            build_payout_amount = (
+                np.sum(disc_costs[actor][mask_build])
+                * (1.0 + self.contingency)
+                * (1.0 + self.profit_margin)
+                * ((1.0 + self.discount_rate) ** target_build_payout_year)
+            )
+
+            if design_payout_year is not None and 0 <= design_payout_year < len(self.year):
+                nondisc_revenue[actor][design_payout_year] += design_payout_amount
+                nondisc_revenue["utility"][design_payout_year] -= design_payout_amount
+
+            if build_payout_year is not None and 0 <= build_payout_year < len(self.year):
+                nondisc_revenue[actor][build_payout_year] += build_payout_amount
+                nondisc_revenue["utility"][build_payout_year] -= build_payout_amount
+
+        if build_payout_year is not None:
+            revenue_start_actual = build_payout_year + self.commission_time
+            if revenue_start_actual < len(self.year):
+                for actor in self.actors:
+                    nondisc_revenue[actor][self.year >= revenue_start_actual] += (
+                        self.revenue_per_year * self.percent_revenue_to.get(actor, 0.0)
+                    )
+
+        for actor in self.actors:
+            disc_revenue[actor] = self._discount(nondisc_revenue[actor])
+            net_disc[actor] = -disc_costs[actor] + disc_revenue[actor]
+            npv_timepath[actor] = np.cumsum(net_disc[actor])
+            npv[actor] = float(npv_timepath[actor][-1])
+
+        return {"NPV": npv}
+
+    def cost_plus(self):
+        nondisc_costs = self._empty_actor_dict()
+        nondisc_revenue = self._empty_actor_dict()
+        disc_costs = self._empty_actor_dict()
+        disc_revenue = self._empty_actor_dict()
+        net_disc = self._empty_actor_dict()
+        npv_timepath = self._empty_actor_dict()
+        npv = {}
+
+        design_costs = self._distribute_progress_amounts(
+            self.actual_design_progress,
+            self.design_cost,
+            0,
+            self.design_time,
+            self.percent_design,
+        )
+        build_costs = self._distribute_progress_amounts(
+            self.actual_build_progress,
+            self.build_cost,
+            self.design_time,
+            self.build_time,
+            self.percent_build,
+        )
+        design_payments = self._distribute_progress_amounts(
+            self.actual_design_progress,
+            self.design_cost,
+            0,
+            self.design_time,
+            self.percent_design,
+        )
+        build_payments = self._distribute_progress_amounts(
+            self.actual_build_progress,
+            self.build_cost,
+            self.design_time,
+            self.build_time,
+            self.percent_build,
+        )
+
+        markup = (1.0 + self.contingency) * (1.0 + self.profit_margin)
+
+        for actor in self.actors:
+            nondisc_costs[actor] = design_costs[actor] + build_costs[actor]
+            if actor != "utility":
+                nondisc_revenue[actor] = (
+                    design_payments[actor] + build_payments[actor]
+                ) * markup
+
+        nondisc_revenue["utility"] = np.zeros_like(self.year, dtype=float)
+        for actor in self.actors:
+            if actor != "utility":
+                nondisc_revenue["utility"] -= nondisc_revenue[actor]
+
+        build_payout_year = self.build_completion_payout_year(self.actual_build_progress)
+        if build_payout_year is not None:
+            revenue_start_actual = build_payout_year + self.commission_time
+            if revenue_start_actual < len(self.year):
+                nondisc_revenue["utility"][self.year >= revenue_start_actual] += (
+                    self.revenue_per_year
+                    * self.percent_revenue_to.get("utility", 0.0)
+                )
+
+        for actor in self.actors:
+            disc_costs[actor] = self._discount(nondisc_costs[actor])
+            disc_revenue[actor] = self._discount(nondisc_revenue[actor])
+            net_disc[actor] = -disc_costs[actor] + disc_revenue[actor]
+            npv_timepath[actor] = np.cumsum(net_disc[actor])
+            npv[actor] = float(npv_timepath[actor][-1])
+
+        return {"NPV": npv}
+
+    def ipd(self):
+        nondisc_costs = self._empty_actor_dict()
+        nondisc_revenue = self._empty_actor_dict()
+        disc_costs = self._empty_actor_dict()
+        disc_revenue = self._empty_actor_dict()
+        net_disc = self._empty_actor_dict()
+        npv_timepath = self._empty_actor_dict()
+        npv = {}
+
+        design_costs = self._distribute_progress_amounts(
+            self.actual_design_progress,
+            self.design_cost,
+            0,
+            self.design_time,
+            self.percent_design,
+        )
+        build_costs = self._distribute_progress_amounts(
+            self.actual_build_progress,
+            self.build_cost,
+            self.design_time,
+            self.build_time,
+            self.percent_build,
+        )
+        design_payments = self._distribute_progress_amounts(
+            self.actual_design_progress,
+            self.design_cost,
+            0,
+            self.design_time,
+            self.percent_design,
+        )
+        build_payments = self._distribute_progress_amounts(
+            self.actual_build_progress,
+            self.build_cost,
+            self.design_time,
+            self.build_time,
+            self.percent_build,
+        )
+
+        markup = (1.0 + self.contingency) * (1.0 + self.profit_margin)
+
+        for actor in self.actors:
+            nondisc_costs[actor] = (design_costs[actor] + build_costs[actor]) * markup
+            if actor != "utility":
+                nondisc_revenue[actor] = (
+                    design_payments[actor] + build_payments[actor]
+                ) * markup
+
+        nondisc_revenue["utility"] = np.zeros_like(self.year, dtype=float)
+        for actor in self.actors:
+            if actor != "utility":
+                nondisc_revenue["utility"] -= nondisc_revenue[actor]
+
+        build_payout_year = self.build_completion_payout_year(self.actual_build_progress)
+        if build_payout_year is not None:
+            revenue_start_actual = build_payout_year + self.commission_time
+            if revenue_start_actual < len(self.year):
+                nondisc_revenue["utility"][self.year >= revenue_start_actual] += (
+                    self.revenue_per_year
+                    * self.percent_revenue_to.get("utility", 0.0)
+                )
+
+        for actor in self.actors:
+            disc_costs[actor] = self._discount(nondisc_costs[actor])
+            disc_revenue[actor] = self._discount(nondisc_revenue[actor])
+            net_disc[actor] = -disc_costs[actor] + disc_revenue[actor]
+            npv_timepath[actor] = np.cumsum(net_disc[actor])
+            npv[actor] = float(npv_timepath[actor][-1])
+
+        return {"NPV": npv}
+
+
+class PDSystemsGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("PDSystems NPV Model")
+        self.root.geometry("1200x820")
+
+        self.actors = ["vendor", "AE", "constructor", "utility"]
+        self.share_groups = [
+            ("percent_design", "Design Share"),
+            ("percent_build", "Build Share"),
+            ("percent_OM_to", "O&M Share"),
+            ("percent_revenue_to", "Revenue Share"),
+        ]
+
+        self.entries = {}
+        self.share_entries = {}
+        self.last_results = {}
+
+        self.default_csv_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "pd_systems_results.csv",
+        )
+
+        self._build_ui()
+        self._load_defaults()
+
+    def _build_ui(self):
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill="both", expand=True, padx=10, pady=10)
+
+        input_frame = ttk.Frame(notebook)
+        output_frame = ttk.Frame(notebook)
+        notebook.add(input_frame, text="Inputs")
+        notebook.add(output_frame, text="Results")
+
+        self._build_input_tab(input_frame)
+        self._build_output_tab(output_frame)
+
+    def _build_input_tab(self, parent):
+        canvas = tk.Canvas(parent)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable = ttk.Frame(canvas)
+
+        scrollable.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+
+        canvas.create_window((0, 0), window=scrollable, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        row = 0
+        ttk.Label(
+            scrollable,
+            text="Core Project Inputs",
+            font=("Segoe UI", 12, "bold"),
+        ).grid(row=row, column=0, columnspan=4, sticky="w", pady=(10, 6))
+        row += 1
+
+        core_fields = [
+            ("run_name", "Run Name / Descriptor"),
+            ("operating_time", "Operating Time (years)"),
+            ("design_time", "Design Time (years)"),
+            ("build_time", "Build Time (years)"),
+            ("commission_time", "Commission Time (years)"),
+            ("design_cost", "Design Cost"),
+            ("build_cost", "Build Cost"),
+            ("OM_per_year", "O&M per Year"),
+            ("revenue_per_year", "Revenue per Year"),
+            ("discount_rate", "Discount Rate (decimal)"),
+            ("contingency", "Contingency (decimal)"),
+            ("profit_margin", "Profit Margin (decimal)"),
+        ]
+
+        for i, (key, label) in enumerate(core_fields):
+            r = row + i // 2
+            c = (i % 2) * 2
+            ttk.Label(scrollable, text=label).grid(
+                row=r, column=c, sticky="w", padx=6, pady=4
+            )
+            entry = ttk.Entry(scrollable, width=28)
+            entry.grid(row=r, column=c + 1, sticky="ew", padx=6, pady=4)
+            self.entries[key] = entry
+
+        row += (len(core_fields) + 1) // 2
+
+        ttk.Label(
+            scrollable,
+            text="Progress Arrays",
+            font=("Segoe UI", 12, "bold"),
+        ).grid(row=row, column=0, columnspan=4, sticky="w", pady=(18, 6))
+        row += 1
+
+        progress_fields = [
+            ("actual_design_progress", "Actual Design Progress (%)"),
+            ("actual_build_progress", "Actual Build Progress (%)"),
+            ("target_design_progress", "Target Design Progress (%)"),
+            ("target_build_progress", "Target Build Progress (%)"),
+        ]
+
+        for i, (key, label) in enumerate(progress_fields):
+            ttk.Label(scrollable, text=label).grid(
+                row=row + i, column=0, sticky="w", padx=6, pady=4
+            )
+            entry = ttk.Entry(scrollable, width=60)
+            entry.grid(
+                row=row + i,
+                column=1,
+                columnspan=3,
+                sticky="ew",
+                padx=6,
+                pady=4,
+            )
+            self.entries[key] = entry
+
+        row += len(progress_fields)
+
+        ttk.Label(
+            scrollable,
+            text="Shares by Actor",
+            font=("Segoe UI", 12, "bold"),
+        ).grid(row=row, column=0, columnspan=5, sticky="w", pady=(18, 6))
+        row += 1
+
+        ttk.Label(scrollable, text="Category").grid(
+            row=row, column=0, sticky="w", padx=6
+        )
+        for j, actor in enumerate(self.actors, start=1):
+            ttk.Label(scrollable, text=actor).grid(
+                row=row, column=j, sticky="w", padx=6
+            )
+        row += 1
+
+        for group_key, group_label in self.share_groups:
+            ttk.Label(scrollable, text=group_label).grid(
+                row=row, column=0, sticky="w", padx=6, pady=4
+            )
+            self.share_entries[group_key] = {}
+            for j, actor in enumerate(self.actors, start=1):
+                entry = ttk.Entry(scrollable, width=12)
+                entry.grid(row=row, column=j, sticky="ew", padx=6, pady=4)
+                self.share_entries[group_key][actor] = entry
+            row += 1
+
+        ttk.Label(
+            scrollable,
+            text=f"Running CSV file: {os.path.basename(self.default_csv_path)}",
+        ).grid(row=row, column=0, columnspan=4, sticky="w", padx=6, pady=(8, 10))
+        row += 1
+
+        button_frame = ttk.Frame(scrollable)
+        button_frame.grid(row=row, column=0, columnspan=4, sticky="ew", pady=(10, 20))
+
+        ttk.Button(
+            button_frame,
+            text="Run Model",
+            command=self.run_model,
+        ).pack(side="left", padx=6, pady=4)
+
+        ttk.Button(
+            button_frame,
+            text="Append to Running CSV",
+            command=self.export_csv,
+        ).pack(side="left", padx=6, pady=4)
+
+    def _build_output_tab(self, parent):
+        ttk.Label(
+            parent,
+            text="Summary",
+            font=("Segoe UI", 12, "bold"),
+        ).pack(anchor="w", padx=10, pady=(10, 6))
+
+        self.summary_text = tk.Text(parent, height=12, wrap="word")
+        self.summary_text.pack(fill="x", padx=10, pady=6)
+
+        ttk.Label(
+            parent,
+            text="CSV Preview",
+            font=("Segoe UI", 12, "bold"),
+        ).pack(anchor="w", padx=10, pady=(10, 6))
+
+        self.preview_text = tk.Text(parent, wrap="none")
+        self.preview_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    def _load_defaults(self):
+        defaults = {
+            "run_name": "descriptor",
+            "operating_time": "10",
+            "design_time": "3",
+            "build_time": "4",
+            "commission_time": "1",
+            "design_cost": "10000",
+            "build_cost": "35000",
+            "OM_per_year": "100",
+            "revenue_per_year": "1200",
+            "discount_rate": "0.05",
+            "contingency": "0.10",
+            "profit_margin": "0.15",
+            "actual_design_progress": "20,60,100",
+            "actual_build_progress": "10,30,60,100",
+            "target_design_progress": "40,80,100",
+            "target_build_progress": "25,50,75,100",
+        }
+
+        for key, value in defaults.items():
+            self.entries[key].insert(0, value)
+
+        share_defaults = {
+            "percent_design": {
+                "vendor": "0.20",
+                "AE": "0.60",
+                "constructor": "0.10",
+                "utility": "0.10",
+            },
+            "percent_build": {
+                "vendor": "0.30",
+                "AE": "0.10",
+                "constructor": "0.50",
+                "utility": "0.10",
+            },
+            "percent_OM_to": {
+                "vendor": "0.00",
+                "AE": "0.00",
+                "constructor": "0.00",
+                "utility": "1.00",
+            },
+            "percent_revenue_to": {
+                "vendor": "0.00",
+                "AE": "0.00",
+                "constructor": "0.00",
+                "utility": "1.00",
+            },
+        }
+
+        for group, actors in share_defaults.items():
+            for actor, value in actors.items():
+                self.share_entries[group][actor].insert(0, value)
+
+    def _parse_float(self, key):
+        return float(self.entries[key].get().strip())
+
+    def _parse_int(self, key):
+        return int(float(self.entries[key].get().strip()))
+
+    def _parse_progress_list(self, text):
+        text = text.strip()
+        if not text:
+            return []
+        parts = [p.strip() for p in text.replace(";", ",").split(",") if p.strip()]
+        return [float(p) for p in parts]
+
+    def _get_inputs(self):
+        data = {
+            "run_name": self.entries["run_name"].get().strip() or "descriptor",
+            "operating_time": self._parse_int("operating_time"),
+            "design_time": self._parse_int("design_time"),
+            "build_time": self._parse_int("build_time"),
+            "commission_time": self._parse_int("commission_time"),
+            "design_cost": self._parse_float("design_cost"),
+            "build_cost": self._parse_float("build_cost"),
+            "OM_per_year": self._parse_float("OM_per_year"),
+            "revenue_per_year": self._parse_float("revenue_per_year"),
+            "discount_rate": self._parse_float("discount_rate"),
+            "contingency": self._parse_float("contingency"),
+            "profit_margin": self._parse_float("profit_margin"),
+            "actual_design_progress": self._parse_progress_list(
+                self.entries["actual_design_progress"].get()
+            ),
+            "actual_build_progress": self._parse_progress_list(
+                self.entries["actual_build_progress"].get()
+            ),
+            "target_design_progress": self._parse_progress_list(
+                self.entries["target_design_progress"].get()
+            ),
+            "target_build_progress": self._parse_progress_list(
+                self.entries["target_build_progress"].get()
+            ),
+            "actors": self.actors,
+        }
+
+        for group_key, _ in self.share_groups:
+            data[group_key] = {
+                actor: float(self.share_entries[group_key][actor].get().strip())
+                for actor in self.actors
+            }
+
+        return data
+
+    def _validate_inputs(self, inputs):
+        if not inputs["actual_design_progress"]:
+            raise ValueError("Actual design progress cannot be blank.")
+        if not inputs["actual_build_progress"]:
+            raise ValueError("Actual build progress cannot be blank.")
+
+        for name in [
+            "actual_design_progress",
+            "actual_build_progress",
+            "target_design_progress",
+            "target_build_progress",
+        ]:
+            arr = inputs[name]
+            if not arr:
+                continue
+            for x in arr:
+                if x < 0 or x > 100:
+                    raise ValueError(f"{name} values must be between 0 and 100.")
+            if any(arr[i] < arr[i - 1] for i in range(1, len(arr))):
+                raise ValueError(f"{name} must be cumulative and non-decreasing.")
+
+    def run_model(self):
+        try:
+            inputs = self._get_inputs()
+            self._validate_inputs(inputs)
+
+            model_inputs = dict(inputs)
+            run_name = model_inputs.pop("run_name")
+
+            model = PDSystems(**model_inputs)
+
+            self.last_results = {
+                "run_name": run_name,
+                "results": {
+                    "Fixed Price": model.fixed_price(),
+                    "Cost Plus": model.cost_plus(),
+                    "IPD": model.ipd(),
+                },
+            }
+
+            self._show_results(self.last_results["results"])
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def _results_to_summary_rows(self):
+        if not self.last_results:
+            return []
+
+        run_name = self.last_results["run_name"]
+        results = self.last_results["results"]
+
+        design_cost = self._parse_float("design_cost")
+        build_cost = self._parse_float("build_cost")
+        discount_rate = self._parse_float("discount_rate")
+
+        contract_name_map = {
+            "Fixed Price": "fixed price",
+            "Cost Plus": "cost+",
+            "IPD": "ipd",
+        }
+
+        rows = []
+        for model_name, result in results.items():
+            rows.append(
+                {
+                    "run name": run_name,
+                    "contract type": contract_name_map.get(
+                        model_name, model_name.lower()
+                    ),
+                    "design cost": design_cost,
+                    "build cost": build_cost,
+                    "discount rate": discount_rate,
+                    "vendor NPV": float(result["NPV"].get("vendor", 0.0)),
+                    "AE NPV": float(result["NPV"].get("AE", 0.0)),
+                    "constructor NPV": float(result["NPV"].get("constructor", 0.0)),
+                    "utility NPV": float(result["NPV"].get("utility", 0.0)),
+                }
+            )
+        return rows
+
+    def _show_results(self, results):
+        self.summary_text.delete("1.0", tk.END)
+
+        lines = []
+        for model_name, result in results.items():
+            lines.append(model_name)
+            lines.append("-" * len(model_name))
+            for actor, value in result["NPV"].items():
+                lines.append(f"{actor}: {value:,.2f}")
+            lines.append("")
+
+        self.summary_text.insert("1.0", "\n".join(lines))
+
+        preview_rows = self._results_to_summary_rows()
+        self.preview_text.delete("1.0", tk.END)
+
+        if preview_rows:
+            headers = list(preview_rows[0].keys())
+            preview_lines = [",".join(headers)]
+            for row in preview_rows:
+                preview_lines.append(",".join(str(row[h]) for h in headers))
+            self.preview_text.insert("1.0", "\n".join(preview_lines))
+
+    def export_csv(self):
+        if not self.last_results:
+            messagebox.showwarning("No Results", "Run the model first.")
+            return
+
+        try:
+            rows = self._results_to_summary_rows()
+            if not rows:
+                raise ValueError("No result rows available to export.")
+
+            file_exists = os.path.exists(self.default_csv_path)
+            write_header = not (file_exists and os.path.getsize(self.default_csv_path) > 0)
+
+            with open(self.default_csv_path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                if write_header:
+                    writer.writeheader()
+                writer.writerows(rows)
+
+            if write_header:
+                messagebox.showinfo(
+                    "Export Complete",
+                    f"Created running CSV:\n{self.default_csv_path}",
+                )
+            else:
+                messagebox.showinfo(
+                    "Export Complete",
+                    f"Appended results to:\n{self.default_csv_path}",
+                )
+
+        except Exception as e:
+            messagebox.showerror("Export Error", str(e))
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = PDSystemsGUI(root)
+    root.mainloop()
