@@ -78,7 +78,7 @@ actual_build_progress[-1]=100
 
 
 #enter run name each time!!
-run_name = input("Test Run")
+run_name = input("Insert run name:")
 
 from functionsfile import PDSystems
 
@@ -87,7 +87,7 @@ from functionsfile import PDSystems
 #ff.cost_plus()
 #ff.ipd()
 
-filename = "cost_risk_runs_bl.csv"
+filename = "cost_risk_runs.csv"
 file_exists = os.path.isfile(filename)
 
 contracts = ['fixed_price','cost_plus','ipd']
@@ -96,10 +96,12 @@ rows = []
 
 for contract in contracts:
     #instantiate
-    pds = PDSystems(operating_time,design_time,build_time,commission_time...) #TODO: all variables
+    pds = PDSystems(design_time,build_time,commission_time,operating_time,discount_rate,design_cost,build_cost,OM_per_year,revenue_per_year,actual_design_time,actual_build_time,actors,percent_design,percent_build,percent_OM_to,percent_revenue_to,profit_margin,contingency,target_build_progress,target_design_progress,actual_build_progress,actual_design_progress) #TODO: all variables
 
     # run the contract model
     getattr(pds,contract)()
+
+    contract_name = print(f"{contract}")
 
     # store outputs
     rows.append([
@@ -108,10 +110,10 @@ for contract in contracts:
         design_cost,
         build_cost,
         discount_rate,
-        ff.NPV["vendor"],
-        ff.NPV["utility"],
-        ff.NPV["AE"],
-        ff.NPV["constructor"]
+        pds.NPV["vendor"],
+        pds.NPV["utility"],
+        pds.NPV["AE"],
+        pds.NPV["constructor"]
     ])
 
 

@@ -7,35 +7,19 @@ BL TODOs:
 import numpy as np
 
 
-"""work this into the inputs file as a target and actual progress arrays
-target_design_progress=np.zeros(design_time)
-target_design_progress[1]=50
-target_design_progress[2]=75
-target_design_progress[3]=100
-target_build_progress=np.zeros(design_time + build_time)
-target_build_progress[-1]=100
-actual_design_progress=np.zeros(actual_design_time)
-actual_design_progress[1]=50
-actual_design_progress[2]=75
-actual_design_progress[3]=100
-actual_build_progress=np.zeros(actual_design_time + actual_build_time)
-#actual_build_progress[-2]=50
-actual_build_progress[-1]=100
-"""
-
 class PDSystems:
 
     """for ALL functions"""
-    def _init_(operating_time,design_time,build_time,commission_time): #TODO: ensure all input variables here
+    def __init__(operating_time,design_time,build_time,commission_time): #TODO: ensure all input variables here
         #TODO: any variable you want to be visible to all functions should have self. at the start.
-        self.year = np.arange(0, operating_time + design_time + build_time + commission_time)
-        self.target_progress = np.append(target_design_progress, target_build_progress)
-        self.actual_progress = np.append(actual_design_progress, actual_build_progress)
+        year = np.arange(0, operating_time + design_time + build_time + commission_time)
+        target_progress = np.append(self.target_design_progress, target_build_progress)
+        actual_progress = np.append(actual_design_progress, actual_build_progress)
 
-        self.progress_array = np.zeros_like(year)
+        progress_array = np.zeros_like(year)
         start_index = 0
-        self.end_index = start_index + actual_progress.shape[0]
-        self.progress_array[start_index:end_index] = actual_progress
+        end_index = start_index + actual_progress.shape[0]
+        progress_array[start_index:end_index] = actual_progress
 
         #Setup masks
         mask_design = year < actual_design_time
@@ -43,26 +27,26 @@ class PDSystems:
         mask_om = year >= (actual_design_time + actual_build_time)
 
         #Dictionaries for payouts
-        self.nondisc_costs = {}
-        self.disc_costs = {}
-        self.net_disc={}
+        nondisc_costs = {}
+        disc_costs = {}
+        net_disc={}
 
-        self.fp_nondisc_revenue={}
-        self.fp_design_payout_amount={}
-        self.fp_build_payout_amount={}
+        fp_nondisc_revenue={}
+        fp_design_payout_amount={}
+        fp_build_payout_amount={}
 
-        self.cp_disc_costs={}
-        self.cp_nondisc_revenue={}
+        cp_disc_costs={}
+        cp_nondisc_revenue={}
 
-        self.ipd_disc_costs={}
-        self.ipd_nondisc_revenue={}
+        ipd_disc_costs={}
+        ipd_nondisc_revenue={}
 
-        self.fp_disc_revenue={}
-        self.cp_disc_revenue={}
-        self.ipd_disc_revenue={}
+        fp_disc_revenue={}
+        cp_disc_revenue={}
+        ipd_disc_revenue={}
 
-        self.NPV_timepath={}
-        self.NPV={}
+        NPV_timepath={}
+        NPV={}
 
 
     def completion_index(self,progress_array): 
