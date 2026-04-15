@@ -10,7 +10,29 @@ import numpy as np
 class PDSystems:
 
     """for ALL functions"""
-    def __init__(operating_time,design_time,build_time,commission_time): #TODO: ensure all input variables here
+    def __init__(
+        self,
+        operating_time,
+        design_time,
+        build_time,
+        commission_time,
+        design_cost,
+        build_cost,
+        OM_per_year,
+        revenue_per_year,
+        discount_rate,
+        contingency,
+        profit_margin,
+        percent_design,
+        percent_build,
+        percent_OM_to,
+        percent_revenue_to,
+        actual_design_progress,
+        actual_build_progress,
+        target_design_progress=None,
+        target_build_progress=None,
+        actors=None
+    ): 
         #TODO: any variable you want to be visible to all functions should have self. at the start.
         year = np.arange(0, operating_time + design_time + build_time + commission_time)
         target_progress = np.append(self.target_design_progress, target_build_progress)
