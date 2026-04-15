@@ -585,6 +585,12 @@ class PDSystemsGUI:
             command=self.export_csv,
         ).pack(side="left", padx=6, pady=4)
 
+        ttk.Button(
+            button_frame,
+            text="Upload and Run Batch CSV",
+            command=self.run_batch_mode,
+        ).pack(side="left", padx=6, pady=4)
+
     def _build_output_tab(self, parent):
         ttk.Label(
             parent,
@@ -753,6 +759,25 @@ class PDSystemsGUI:
         except Exception as e:
             messagebox.showerror("Error", str(e))
 
+    def run_batch_mode(self):
+        from tkinter import filedialog
+
+        input_path = filedialog.askopenfilename(
+            title="Select Input CSV",
+            filetypes=[("CSV Files", "*.csv")]
+        )
+
+        if not input_path:
+            return
+
+        output_path = input_path.replace(".csv", "_output.csv")
+
+        try:
+            run_batch_csv(input_path, output_path)
+            messagebox.showinfo("Success", f"Batch run complete:\n{output_path}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
     def _results_to_summary_rows(self):
         if not self.last_results:
             return []
@@ -845,6 +870,96 @@ class PDSystemsGUI:
         except Exception as e:
             messagebox.showerror("Export Error", str(e))
 
+def run_batch_csv(input_csv_path, output_csv_path):
+    import csv
+
+    def parse_list(s):
+        if not s:
+            return []
+        return [float(x.strip()) for x in s.split(",") if x.strip()]
+
+    results = []
+
+    with open(input_csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        for row in reader:
+            try:
+                inputs = {
+                    "operating_time": int(row["operating_time"]),
+                    "design_time": int(row["design_time"]),
+                    "build_time": int(row["build_time"]),
+                    "commission_time": int(row["commission_time"]),
+                    "design_cost": float(row["design_cost"]),
+                    "build_cost": float(row["build_cost"]),
+                    "OM_per_year": float(row["OM_per_year"]),
+                    "revenue_per_year": float(row["revenue_per_year"]),
+                    "discount_rate": float(row["discount_rate"]),
+                    "contingency": float(row["contingency"]),
+                    "profit_margin": float(row["profit_margin"]),
+                    "actual_design_progress": parse_list(row["actual_design_progress"]),
+                    "actual_build_progress": parse_list(row["actual_build_progress"]),
+                    "target_design_progress": parse_list(row.get("target_design_progress", "")),
+                    "target_build_progress": parse_list(row.get("target_build_progress", "")),
+                    "actors": ["vendor", "AE", "constructor", "utility"],
+                }
+
+                inputs["percent_design"] = {
+                    "vendor": float(row["vendor_design"]),
+                    "AE": float(row["AE_design"]),
+                    "constructor": float(row["constructor_design"]),
+                    "utility": float(row["utility_design"]),
+                }
+
+                inputs["percent_build"] = {
+                    "vendor": float(row["vendor_build"]),
+                    "AE": float(row["AE_build"]),
+                    "constructor": float(row["constructor_build"]),
+                    "utility": float(row["utility_build"]),
+                }
+
+                inputs["percent_OM_to"] = {
+                    "vendor": float(row["vendor_om"]),
+                    "AE": float(row["AE_om"]),
+                    "constructor": float(row["constructor_om"]),
+                    "utility": float(row["utility_om"]),
+                }
+
+                inputs["percent_revenue_to"] = {
+                    "vendor": float(row["vendor_rev"]),
+                    "AE": float(row["AE_rev"]),
+                    "constructor": float(row["constructor_rev"]),
+                    "utility": float(row["utility_rev"]),
+                }
+
+                model = PDSystems(**inputs)
+
+                outputs = {
+                    "fixed_vendor_NPV": model.fixed_price()["NPV"]["vendor"],
+                    "fixed_AE_NPV": model.fixed_price()["NPV"]["AE"],
+                    "fixed_constructor_NPV": model.fixed_price()["NPV"]["constructor"],
+                    "fixed_utility_NPV": model.fixed_price()["NPV"]["utility"],
+
+                    "costplus_vendor_NPV": model.cost_plus()["NPV"]["vendor"],
+                    "costplus_AE_NPV": model.cost_plus()["NPV"]["AE"],
+                    "costplus_constructor_NPV": model.cost_plus()["NPV"]["constructor"],
+                    "costplus_utility_NPV": model.cost_plus()["NPV"]["utility"],
+
+                    "ipd_vendor_NPV": model.ipd()["NPV"]["vendor"],
+                    "ipd_AE_NPV": model.ipd()["NPV"]["AE"],
+                    "ipd_constructor_NPV": model.ipd()["NPV"]["constructor"],
+                    "ipd_utility_NPV": model.ipd()["NPV"]["utility"],
+                }
+
+                results.append({**row, **outputs})
+
+            except Exception as e:
+                results.append({**row, "error": str(e)})
+
+    with open(output_csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=results[0].keys())
+        writer.writeheader()
+        writer.writerows(results)
 
 if __name__ == "__main__":
     root = tk.Tk()
