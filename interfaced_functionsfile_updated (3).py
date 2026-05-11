@@ -67,6 +67,8 @@ class App:
         arrays = [
             ("Actual Design Progress (%)", "actual_design_progress"),
             ("Actual Build Progress (%)", "actual_build_progress"),
+            ("Target Design Progress (%)", "target_design_progress"),
+            ("Target Build Progress (%)", "target_build_progress"),
         ]
 
         for i, (label, key) in enumerate(arrays):
@@ -132,10 +134,10 @@ class App:
         data["revenue_shares"] = {}
 
         for actor in actors:
-            data["design_shares"][actor] = float(self.share_entries[f"design_{actor}"].get())
-            data["build_shares"][actor] = float(self.share_entries[f"build_{actor}"].get())
-            data["om_shares"][actor] = float(self.share_entries[f"om_{actor}"].get())
-            data["revenue_shares"][actor] = float(self.share_entries[f"revenue_{actor}"].get())
+            data["design_shares"][actor] = float(self.share_entries[f"design_{actor}"].get() or 0)
+            data["build_shares"][actor] = float(self.share_entries[f"build_{actor}"].get() or 0)
+            data["om_shares"][actor] = float(self.share_entries[f"om_{actor}"].get() or 0)
+            data["revenue_shares"][actor] = float(self.share_entries[f"revenue_{actor}"].get() or 0)
 
         return data
 
@@ -143,31 +145,96 @@ class App:
     # ACTIONS
     # -------------------------
     def run_model(self):
+
         inputs = self.collect_inputs()
         model = PDSystems(inputs)
 
-        self.results = model.run_model()
+        model.fixed_price()   # you can switch to cost_plus() or ipd()
+
+        self.results = model.NPV
 
         # show results
         for widget in self.results_tab.winfo_children():
             widget.destroy()
 
-        for i, (k, v) in enumerate(self.results.items()):
+        for k, v in self.results.items():
             tk.Label(self.results_tab, text=f"{k}: {v:.2f}").pack(anchor="w")
 
         self.notebook.select(self.results_tab)
 
     def load_csv(self):
-        path = filedialog.askopenfilename(filetypes=[("CSV", "*.csv")])
+        path = filedialog.askopenfilename(
+            filetypes=[("CSV", "*.csv")]
+        )
+
         if not path:
             return
 
         df = pd.read_csv(path)
 
-        for key in self.entries:
-            if key in df.columns:
-                self.entries[key].delete(0, tk.END)
-                self.entries[key].insert(0, str(df[key].iloc[0]))
+        row = df.iloc[0]
+
+        mapping = {
+            "name": 0,                    # A
+            "operating_time": 1,          # B
+            "design_time": 2,             # C
+            "build_time": 3,              # D
+            "commission_time": 4,         # E
+            "design_cost": 5,             # F
+            "build_cost": 6,              # G
+            "om_per_year": 7,             # H
+            "revenue_per_year": 8,        # I
+            "discount_rate": 9,           # J
+            "contingency": 10,            # K
+            "profit_margin": 11,          # L
+            "actual_design_progress": 12, # M
+            "actual_build_progress": 13,  # N
+            "target_design_progress": 14, # O
+            "target_build_progress": 15,  # P
+        }
+
+        for key, col_idx in mapping.items():
+
+            value = row.iloc[col_idx]
+
+            self.entries[key].delete(0, tk.END)
+            self.entries[key].insert(0, str(value))
+
+
+        share_mapping = {
+            # DESIGN
+            "design_vendor": 16,       # Q
+            "design_AE": 17,           # R
+            "design_constructor": 18,  # S
+            "design_utility": 19,      # T
+
+            # BUILD
+            "build_vendor": 20,        # U
+            "build_AE": 21,            # V
+            "build_constructor": 22,   # W
+            "build_utility": 23,       # X
+
+            # OM
+            "om_vendor": 24,           # Y
+            "om_AE": 25,               # Z
+            "om_constructor": 26,      # AA
+            "om_utility": 27,          # AB
+
+            # REVENUE
+            "revenue_vendor": 28,      # AC
+            "revenue_AE": 29,          # AD
+            "revenue_constructor": 30, # AE
+            "revenue_utility": 31,     # AF
+        }
+
+        for key, col_idx in share_mapping.items():
+
+            value = row.iloc[col_idx]
+
+            if key in self.share_entries:
+                self.share_entries[key].delete(0, tk.END)
+                self.share_entries[key].insert(0, str(value))
+
 
     def export_csv(self):
         if not hasattr(self, "results"):
