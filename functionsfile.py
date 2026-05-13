@@ -134,10 +134,8 @@ class PDSystems:
 
         def completion_payout_year(actual_progress):
             """
-            Map design progress index to payout year.
-            We assume design progress array starts at design year 0 and payout historically
-            occurred at year == design_time (i.e., after the design phase finishes).
-            If design actually completes at index i (0-based), we place payout at absolute year = i + 1.
+            Map design progress index to payout year. We assume design progress array starts at design year 0 and payout historically
+            occurred at year == design_time (i.e., after the design phase finishes). If design actually completes at index i (0-based), we place payout at absolute year = i + 1.
             """
             idx = self.completion_index(actual_progress)
             if idx is None:
@@ -149,16 +147,17 @@ class PDSystems:
         self.build_payout_year = completion_payout_year(self.actual_build_progress)
         self.build_target_payout_year = completion_payout_year(self.target_build_progress)
 
+        #this could be an optional true/false "button" where we can decide if we want to wait to pay out design until after build is complete
+        self.fp_design_payout_milestone = True
         if self.fp_design_payout_milestone:
             self.design_payout_year = completion_payout_year(self.actual_design_progress)
             self.design_target_payout_year = completion_payout_year(self.target_design_progress)
         else:
             self.design_payout_year = self.build_payout_year
             self.design_target_payout_year = self.build_target_payout_year 
-
+            
         self.actual_design_time = completion_payout_year(self.actual_design_progress)
         self.actual_build_time = self.build_payout_year - self.actual_design_time
-
 
         for actor in self.actors:
                     #fixed price (fp) non-discounted revenues — MILESTONE ONLY 
@@ -203,23 +202,11 @@ class PDSystems:
             # total NPV (end of timeline)
             self.NPV[actor] = float(self.NPV_timepath[actor][-1])
 
-
         print("Design payout year (computed):", self.design_payout_year)
         print("Build payout year (computed):", self.build_payout_year)
         print("Revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
         self.NPVprint()
 
-    """
-        # If you want the year-by-year arrays for plotting/export:
-        results = {
-            "year": year,
-            "nondisc_costs":nondisc_costs,
-            "fp_nondisc_revenue": fp_nondisc_revenue,
-            "net_disc": net_disc,
-            "NPV_timepath": NPV_timepath,
-        }
-        #print(results)
-    """
 
 
     """COST+"""
@@ -480,7 +467,7 @@ class PDSystems:
                 self.ipd_nondisc_utility_revenue[self.year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
                 self.ipd_disc_utility_revenue = self.ipd_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.year)
                 self.markup = (1 + self.contingency) * (1 + self.profit_margin)
-                ipd_disc_utility_revenue *= self.markup
+                self.ipd_disc_utility_revenue *= self.markup
             else:
                 # revenue start beyond timeline => no revenue recorded
                 pass
@@ -501,7 +488,7 @@ class PDSystems:
             self.ipd_disc_revenue[actor] *= self.markup
 
             self.net_disc[actor] = -self.ipd_disc_costs[actor] + self.ipd_disc_revenue[actor]
-            self.net_disc["utility"] = -self.ipd_disc_costs[actor] + self.ipd_disc_revenue[actor] + ipd_disc_utility_revenue
+            self.net_disc["utility"] = -self.ipd_disc_costs[actor] + self.ipd_disc_revenue[actor] + self.ipd_disc_utility_revenue
             #npv cumulative sums (NPV at each year)
             self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
             # total NPV (end of timeline)
