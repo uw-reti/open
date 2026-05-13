@@ -102,7 +102,24 @@ class PDSystems:
         frac = (i + 1) / n_years
         year_within = int(np.ceil(frac * phase_length)) - 1
         year_within = max(0, min(phase_length - 1, year_within))
-        return phase_start + year_within
+        return int(phase_start + year_within)
+
+    def map_cumulative_progress_to_phase_year(self, cum_pct, phase_start, phase_length):
+        """Map cumulative progress (0..100%) to an absolute model year within the phase.
+
+        Uses the same spacing rule as map_sample_to_phase_year but with completion
+        fraction p = cum_pct/100 instead of p = (i+1)/n_years. Cash tied to *earned*
+        progress moves to later phase years when the actual curve is back-loaded,
+        so discounted NPV reflects delay (closer in spirit to fixed-price milestone timing).
+
+        Costs may still use map_sample_to_phase_year if you keep distribute_progress_costs unchanged."""
+        if phase_length <= 0:
+            raise ValueError("phase_length must be > 0")
+        p = float(np.clip(np.asarray(cum_pct, dtype=float), 0.0, 100.0)) / 100.0
+        pl = int(phase_length)
+        year_within = int(np.ceil(p * pl)) - 1
+        year_within = max(0, min(pl - 1, year_within))
+        return int(phase_start + year_within)
 
     def build_completion_payout_year(self,actual_build_progress, design_time, build_time):
         """Return the absolute year when build progress reaches 100% (map sample index to a year).
@@ -247,7 +264,8 @@ class PDSystems:
         def distribute_progress_payments(progress_array, phase_cost, phase_start, phase_length, shares):
             """Convert a cumulative progress array (percent 0..100) into an annual payment array for each party in shares (dict with keys e.g. 'vendor','AE','constructor','utility').
             Returns dict of arrays (same length as 'year' timeline). Payment for each party = delta_progress_fraction * phase_cost * party_share.
-            delta_progress_fraction = (progress[i] - progress[i-1]) / 100, with progress[-1]=0. Each delta is assigned to the mapped year computed by map_sample_to_phase_year. """
+            delta_progress_fraction = (progress[i] - progress[i-1]) / 100. Each increment is booked to the phase year when cumulative progress reaches progress[i]
+            (map_cumulative_progress_to_phase_year), so delayed/back-loaded curves move cash later vs index-only mapping."""
             
             self.n_year = len(progress_array)
             self.payments = {k: np.zeros_like(self.year, dtype=float) for k in shares.keys()}
@@ -260,8 +278,10 @@ class PDSystems:
             #print(delta_cum_progress_frac)
 
             for i in range(self.n_year):
-                # which year to assign this sample's payment to
-                self.pay_year = self.map_sample_to_phase_year(i, self.n_year, phase_start, phase_length)
+                # Pay this increment when cumulative actual progress reaches progress_array[i] (not by sample index alone).
+                self.pay_year = self.map_cumulative_progress_to_phase_year(
+                    progress_array[i], phase_start, phase_length
+                )
                 # guard: if pay_year outside timeline, cap to last year
                 #if pay_year < 0:
                 #    pay_year = 0
@@ -396,6 +416,7 @@ class PDSystems:
             return self.costs
 
         def distribute_progress_payments(progress_array, phase_cost, phase_start, phase_length, shares):
+            """Same cumulative-% timing as cost_plus: pay each increment in the phase year implied by progress_array[i]."""
             
             self.n_year = len(progress_array)
             self.payments = {k: np.zeros_like(self.year, dtype=float) for k in shares.keys()}
@@ -407,8 +428,9 @@ class PDSystems:
             #print(delta_cum_progress_frac)
 
             for i in range(self.n_year):
-                # which year to assign this sample's payment to
-                self.pay_year = self.map_sample_to_phase_year(i, self.n_year, phase_start, phase_length)
+                self.pay_year = self.map_cumulative_progress_to_phase_year(
+                    progress_array[i], phase_start, phase_length
+                )
                 # guard: if pay_year outside timeline, cap to last year
                 #if pay_year < 0:
                 #    pay_year = 0
