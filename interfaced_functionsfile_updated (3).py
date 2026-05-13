@@ -1,5 +1,6 @@
+import os
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
 import pandas as pd
 from functionsfile import PDSystems
 
@@ -112,6 +113,73 @@ class App:
     def parse_array(self, text):
         return [float(x.strip()) for x in text.split(",") if x.strip()]
 
+    @staticmethod
+    def _read_inputs_csv(path):
+        """First line is a header row. Each data row is mapped by column position (iloc 0..31)."""
+        df = pd.read_csv(path, header=0)
+        return df.dropna(how="all")
+
+    def _inputs_from_csv_row(self, row):
+        """Build PDSystems inputs dict from one CSV row (positional columns)."""
+        return {
+            "name": row.iloc[0],
+            "operating_time": int(row.iloc[1]),
+            "design_time": int(row.iloc[2]),
+            "build_time": int(row.iloc[3]),
+            "commission_time": int(row.iloc[4]),
+            "design_cost": float(row.iloc[5]),
+            "build_cost": float(row.iloc[6]),
+            "om_per_year": float(row.iloc[7]),
+            "revenue_per_year": float(row.iloc[8]),
+            "discount_rate": float(row.iloc[9]),
+            "contingency": float(row.iloc[10]),
+            "profit_margin": float(row.iloc[11]),
+            "actual_design_progress": [
+                float(x.strip())
+                for x in str(row.iloc[12]).split(",")
+                if x.strip()
+            ],
+            "actual_build_progress": [
+                float(x.strip())
+                for x in str(row.iloc[13]).split(",")
+                if x.strip()
+            ],
+            "target_design_progress": [
+                float(x.strip())
+                for x in str(row.iloc[14]).split(",")
+                if x.strip()
+            ],
+            "target_build_progress": [
+                float(x.strip())
+                for x in str(row.iloc[15]).split(",")
+                if x.strip()
+            ],
+            "design_shares": {
+                "vendor": float(row.iloc[16]),
+                "AE": float(row.iloc[17]),
+                "constructor": float(row.iloc[18]),
+                "utility": float(row.iloc[19]),
+            },
+            "build_shares": {
+                "vendor": float(row.iloc[20]),
+                "AE": float(row.iloc[21]),
+                "constructor": float(row.iloc[22]),
+                "utility": float(row.iloc[23]),
+            },
+            "om_shares": {
+                "vendor": float(row.iloc[24]),
+                "AE": float(row.iloc[25]),
+                "constructor": float(row.iloc[26]),
+                "utility": float(row.iloc[27]),
+            },
+            "revenue_shares": {
+                "vendor": float(row.iloc[28]),
+                "AE": float(row.iloc[29]),
+                "constructor": float(row.iloc[30]),
+                "utility": float(row.iloc[31]),
+            },
+        }
+
     def collect_inputs(self):
         data = {}
 
@@ -149,16 +217,55 @@ class App:
         inputs = self.collect_inputs()
         model = PDSystems(inputs)
 
-        model.fixed_price()   # you can switch to cost_plus() or ipd()
+        model.fixed_price()
+        fp_npv = dict(model.NPV)
+        fp_total = sum(fp_npv.values())
 
-        self.results = model.NPV
+        model.cost_plus()
+        cp_npv = dict(model.NPV)
+        cp_total = sum(cp_npv.values())
+
+        model.ipd()
+        ipd_npv = dict(model.NPV)
+        ipd_total = sum(ipd_npv.values())
+
+        self.results = {
+            "fixed_price": fp_npv,
+            "cost_plus": cp_npv,
+            "ipd": ipd_npv,
+        }
+        self.results["_totals"] = {
+            "fixed_price_NPV": fp_total,
+            "cost_plus_NPV": cp_total,
+            "IPD_NPV": ipd_total,
+        }
 
         # show results
         for widget in self.results_tab.winfo_children():
             widget.destroy()
 
-        for k, v in self.results.items():
-            tk.Label(self.results_tab, text=f"{k}: {v:.2f}").pack(anchor="w")
+        tk.Label(
+            self.results_tab,
+            text=(
+                f"Total NPV (all actors), fixed price: {fp_total:,.2f}\n"
+                f"Total NPV (all actors), cost plus: {cp_total:,.2f}\n"
+                f"Total NPV (all actors), IPD: {ipd_total:,.2f}"
+            ),
+            justify="left",
+        ).pack(anchor="w", pady=(0, 8))
+
+        for title, npv_dict in (
+            ("Fixed price (per actor)", fp_npv),
+            ("Cost plus (per actor)", cp_npv),
+            ("IPD (per actor)", ipd_npv),
+        ):
+            tk.Label(
+                self.results_tab,
+                text=title,
+                font=("TkDefaultFont", 9, "bold"),
+            ).pack(anchor="w", pady=(6, 0))
+            for k, v in npv_dict.items():
+                tk.Label(self.results_tab, text=f"  {k}: {v:,.2f}").pack(anchor="w")
 
         self.notebook.select(self.results_tab)
 
@@ -170,7 +277,9 @@ class App:
         if not path:
             return
 
-        df = pd.read_csv(path)
+        df = self._read_inputs_csv(path)
+        self.loaded_df = df
+        self.loaded_csv_path = path
 
         row = df.iloc[0]
 
@@ -235,18 +344,78 @@ class App:
                 self.share_entries[key].delete(0, tk.END)
                 self.share_entries[key].insert(0, str(value))
 
+        n = len(df)
+        messagebox.showinfo(
+            "CSV loaded",
+            f"Loaded {n} data row(s) below the header. The form shows the first data row.\n"
+            "Use Export CSV to run every data row and append all three NPV totals.",
+        )
 
     def export_csv(self):
-        if not hasattr(self, "results"):
-            return
 
-        df = pd.DataFrame([self.results])
+        if not hasattr(self, "loaded_df") or self.loaded_df is None or len(self.loaded_df) == 0:
+            path = filedialog.askopenfilename(
+                title="Select input CSV (all rows will be run)",
+                filetypes=[("CSV", "*.csv")],
+            )
+            if not path:
+                return
+            self.loaded_df = self._read_inputs_csv(path)
+            self.loaded_csv_path = path
 
-        path = filedialog.asksaveasfilename(defaultextension=".csv")
-        if path:
-            df.to_csv(path, index=False)
+        df = self.loaded_df.copy()
 
+        output_rows = []
 
+        for row_idx, (_, row) in enumerate(df.iterrows()):
+
+            try:
+                inputs = self._inputs_from_csv_row(row)
+
+                model = PDSystems(inputs)
+
+                model.fixed_price()
+                fixed_price_npv = sum(model.NPV.values())
+
+                model.cost_plus()
+                cost_plus_npv = sum(model.NPV.values())
+
+                model.ipd()
+                ipd_npv = sum(model.NPV.values())
+
+                output_row = row.to_dict()
+                output_row["csv_row_index"] = row_idx
+                output_row["fixed_price_NPV"] = fixed_price_npv
+                output_row["cost_plus_NPV"] = cost_plus_npv
+                output_row["IPD_NPV"] = ipd_npv
+                output_row["batch_error"] = ""
+
+            except Exception as e:
+                output_row = row.to_dict()
+                output_row["csv_row_index"] = row_idx
+                output_row["fixed_price_NPV"] = None
+                output_row["cost_plus_NPV"] = None
+                output_row["IPD_NPV"] = None
+                output_row["batch_error"] = str(e)
+
+            output_rows.append(output_row)
+
+        output_df = pd.DataFrame(output_rows)
+
+        base = os.path.basename(self.loaded_csv_path)
+        initial = base.replace(".csv", "_results.csv", 1) if base.lower().endswith(".csv") else base + "_results.csv"
+
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            initialfile=initial,
+        )
+
+        if save_path:
+            output_df.to_csv(save_path, index=False)
+            messagebox.showinfo(
+                "Export complete",
+                f"Wrote {len(output_df)} row(s) to:\n{save_path}",
+            )
 if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)
