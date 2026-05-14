@@ -9,7 +9,7 @@ import numpy as np
 
 class PDSystems:
 
-    """for ALL functions"""
+    """for ALL functions --> defining input names"""
     def __init__(self, inputs):
         self.inputs = inputs
         
@@ -86,17 +86,16 @@ class PDSystems:
 
         self.NPV_timepath = {}
         self.NPV = {}
-        
 
-    def completion_index(self,progress_array): 
-        """Return the first index where progress >= 100; else return None."""
+
+    """a fxn that returns the first index where progress >= 100; else return None."""
+    def completion_index(self,progress_array):
         idx = np.where(progress_array >= 100)[0]
         return int(idx[0]) if idx.size > 0 else None
 
+    
+    """a fxn that maps a sample index i (0-based) from a progress array of length n_years into a year within the phase: an integer in [phase_start, phase_start + phase_length - 1]."""
     def map_sample_to_phase_year(self,i, n_years, phase_start, phase_length):
-        """Map a sample index i (0-based) from a progress array of length n_years into a year within the phase: an integer in [phase_start, phase_start + phase_length - 1].
-        We map the sample's completion (i+1)/n_samples fraction of the phase to a year with: year_within = ceil((i+1) / n_samples * phase_length) - 1
-        This assigns early samples to earlier years and the last sample to the last phase year."""
         if n_years <= 0:
             raise ValueError("n_years must be > 0")
         frac = (i + 1) / n_years
@@ -104,10 +103,9 @@ class PDSystems:
         year_within = max(0, min(phase_length - 1, year_within))
         return int(phase_start + year_within)
 
+    """a fxn that maps a cumulative progress (0..100%) to an absolute model year within the phase: an integer in [phase_start, phase_start + phase_length - 1]."""
     def map_cumulative_progress_to_phase_year(self, cum_pct, phase_start, phase_length):
-        """Map cumulative progress (0..100%) to an absolute model year within the phase.
-
-        Uses the same spacing rule as map_sample_to_phase_year but with completion
+        """Uses the same spacing rule as map_sample_to_phase_year but with completion
         fraction p = cum_pct/100 instead of p = (i+1)/n_years. Cash tied to *earned*
         progress moves to later phase years when the actual curve is back-loaded,
         so discounted NPV reflects delay (closer in spirit to fixed-price milestone timing).
@@ -121,9 +119,8 @@ class PDSystems:
         year_within = max(0, min(pl - 1, year_within))
         return int(phase_start + year_within)
 
+    """a fxn that returns the absolute year when build progress reaches 100% (map sample index to a year). If build never reaches 100%, return None."""
     def build_completion_payout_year(self,actual_build_progress, design_time, build_time):
-        """Return the absolute year when build progress reaches 100% (map sample index to a year).
-        If build never reaches 100%, return None."""
         idx = self.completion_index(actual_build_progress)
         if idx is None:
             return None

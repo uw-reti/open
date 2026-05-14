@@ -1,4 +1,23 @@
 import os
+import re
+import sys
+from pathlib import Path
+
+# If the IDE "Run" button uses a global Python without your deps, re-run using this folder's .venv.
+_root = Path(__file__).resolve().parent
+_script = Path(__file__).resolve()
+_venv_python = _root / ".venv" / "Scripts" / "python.exe"
+if _venv_python.is_file():
+    try:
+        _wrong_interpreter = Path(sys.executable).resolve() != _venv_python.resolve()
+    except OSError:
+        _wrong_interpreter = True
+    if _wrong_interpreter:
+        import subprocess
+
+        rc = subprocess.call([str(_venv_python), str(_script), *sys.argv[1:]])
+        raise SystemExit(rc)
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import pandas as pd
@@ -6,6 +25,15 @@ from functionsfile import PDSystems
 
 
 class App:
+    """PDSystems NPV GUI.
+
+    **cost_risk_inputs** CSV (main batch format): first 32 columns A–AF — A–L core scalars;
+    M–N comma-separated actual design / build cumulative %; O–P target design / build %;
+    Q–AF sixteen share fractions in order: design (vendor, AE, constructor, utility), then build,
+    then O&M, then revenue (same actor order in each block). Headers are matched case-insensitively;
+    if headers are missing but 32+ columns exist, the same layout is read by column position.
+    """
+
     def __init__(self, root):
         self.root = root
         self.root.title("PDSystems NPV Model")
@@ -107,78 +135,344 @@ class App:
         tk.Button(btns, text="Run Model", command=self.run_model).pack(side="left", padx=5)
         tk.Button(btns, text="Export CSV", command=self.export_csv).pack(side="left", padx=5)
 
-    # -------------------------
-    # HELPERS
-    # -------------------------
+
     def parse_array(self, text):
         return [float(x.strip()) for x in text.split(",") if x.strip()]
 
     @staticmethod
-    def _read_inputs_csv(path):
-        """First line is a header row. Each data row is mapped by column position (iloc 0..31)."""
-        df = pd.read_csv(path, header=0)
-        return df.dropna(how="all")
+    def _norm_header(s):
+        """Normalize CSV header for matching: lower, strip, collapse spaces/hyphens to underscores."""
+        t = str(s).strip().lower()
+        return re.sub(r"[\s\-]+", "_", t)
 
-    def _inputs_from_csv_row(self, row):
-        """Build PDSystems inputs dict from one CSV row (positional columns)."""
+    @staticmethod
+    def _header_lookup(df):
+        """Map normalized header -> first physical column name in the file."""
+        m = {}
+        for c in df.columns:
+            k = App._norm_header(c)
+            if k and k not in m:
+                m[k] = c
+        return m
+
+    def _cell_raw(self, row, lookup, *aliases):
+        """Return stripped string cell for first alias that matches a column (case/spacing insensitive)."""
+        for a in aliases:
+            col = lookup.get(self._norm_header(a))
+            if col is None or col not in row.index:
+                continue
+            v = row[col]
+            if v is None or (isinstance(v, float) and pd.isna(v)):
+                return ""
+            return str(v).strip()
+        return ""
+
+    def _cell_req_float(self, row, lookup, row_num, *aliases, label=None):
+        s = self._cell_raw(row, lookup, *aliases)
+        if s == "":
+            lab = label or aliases[0]
+            raise ValueError(f"Row {row_num}: missing or empty column for {lab!r} (tried {list(aliases)}).")
+        return float(s)
+
+    def _cell_req_int(self, row, lookup, row_num, *aliases, label=None):
+        return int(float(self._cell_req_float(row, lookup, row_num, *aliases, label=label)))
+
+    @staticmethod
+    def _parse_progress_cell(text):
+        if text is None or (isinstance(text, float) and pd.isna(text)):
+            return []
+        s = str(text).strip().replace(";", ",")
+        if not s:
+            return []
+        return [float(x.strip()) for x in s.split(",") if x.strip()]
+
+    @staticmethod
+    def _read_inputs_csv(path):
+        """Read **cost_risk_inputs** CSV: row 1 = headers, then one project per row.
+
+        Expected layout (first 32 columns A–AF): A–L core inputs; M–N actual design/build progress
+        (comma-separated %); O–P target design/build progress; Q–T design shares; U–X build;
+        Y–AB O&M; AC–AF revenue — each share block order vendor, AE, constructor, utility.
+
+        Columns are matched by **header name** (normalized). If headers are missing (e.g. all
+        ``Unnamed:``) but there are at least 32 columns, the same A–AF layout is read **by position**."""
+        read_kw = dict(header=0, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+        try:
+            df = pd.read_csv(path, **read_kw)
+        except UnicodeDecodeError:
+            read_kw["encoding"] = "latin-1"
+            df = pd.read_csv(path, **read_kw)
+
+        if df.shape[1] <= 1 or df.shape[1] < 8:
+            try:
+                df = pd.read_csv(
+                    path,
+                    header=0,
+                    sep=";",
+                    dtype=str,
+                    keep_default_na=False,
+                    encoding="utf-8-sig",
+                )
+            except Exception:
+                pass
+
+        df = df.fillna("").reset_index(drop=True)
+        nonempty = ~df.apply(lambda r: r.astype(str).str.strip().eq("").all(), axis=1)
+        return df.loc[nonempty].reset_index(drop=True)
+
+    @staticmethod
+    def _scalar_str_cell(v):
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return ""
+        return str(v).strip()
+
+    def _inputs_from_positional_cost_risk_row(self, row, rn):
+        """Parse one row using **fixed column indices 0..31** (Excel A–AF) for *cost_risk_inputs*.
+
+        A–L (0–11): name, operating_time, design_time, build_time, commission_time, design_cost,
+        build_cost, om_per_year, revenue_per_year, discount_rate, contingency, profit_margin.
+
+        M–N (12–13): actual design / build progress (comma-separated cumulative %).
+        O–P (14–15): target design / build progress (comma-separated).
+        Q–T (16–19): design shares vendor, AE, constructor, utility.
+        U–X (20–23): build shares (same actor order).
+        Y–AB (24–27): O&M shares.
+        AC–AF (28–31): revenue shares.
+        """
+        if len(row) < 32:
+            raise ValueError(
+                f"Row {rn}: cost_risk_inputs expects at least 32 columns (A–AF); this row has {len(row)}."
+            )
+
+        def gs(i):
+            return self._scalar_str_cell(row.iloc[i])
+
+        def rf(i, lab):
+            s = gs(i)
+            if not s:
+                raise ValueError(f"Row {rn}: empty {lab} (column index {i}, 0=A).")
+            return float(s)
+
+        def ri(i, lab):
+            return int(float(rf(i, lab)))
+
+        name = gs(0) or f"row_{rn}"
+        actual_design = self._parse_progress_cell(gs(12))
+        actual_build = self._parse_progress_cell(gs(13))
+        if not actual_design:
+            raise ValueError(f"Row {rn}: actual design progress (column M / index 12) is empty.")
+        if not actual_build:
+            raise ValueError(f"Row {rn}: actual build progress (column N / index 13) is empty.")
+
+        td_raw, tb_raw = gs(14), gs(15)
+        target_design = self._parse_progress_cell(td_raw) if td_raw else list(actual_design)
+        target_build = self._parse_progress_cell(tb_raw) if tb_raw else list(actual_build)
+
         return {
-            "name": row.iloc[0],
-            "operating_time": int(row.iloc[1]),
-            "design_time": int(row.iloc[2]),
-            "build_time": int(row.iloc[3]),
-            "commission_time": int(row.iloc[4]),
-            "design_cost": float(row.iloc[5]),
-            "build_cost": float(row.iloc[6]),
-            "om_per_year": float(row.iloc[7]),
-            "revenue_per_year": float(row.iloc[8]),
-            "discount_rate": float(row.iloc[9]),
-            "contingency": float(row.iloc[10]),
-            "profit_margin": float(row.iloc[11]),
-            "actual_design_progress": [
-                float(x.strip())
-                for x in str(row.iloc[12]).split(",")
-                if x.strip()
-            ],
-            "actual_build_progress": [
-                float(x.strip())
-                for x in str(row.iloc[13]).split(",")
-                if x.strip()
-            ],
-            "target_design_progress": [
-                float(x.strip())
-                for x in str(row.iloc[14]).split(",")
-                if x.strip()
-            ],
-            "target_build_progress": [
-                float(x.strip())
-                for x in str(row.iloc[15]).split(",")
-                if x.strip()
-            ],
+            "name": name,
+            "operating_time": ri(1, "operating_time"),
+            "design_time": ri(2, "design_time"),
+            "build_time": ri(3, "build_time"),
+            "commission_time": ri(4, "commission_time"),
+            "design_cost": rf(5, "design_cost"),
+            "build_cost": rf(6, "build_cost"),
+            "om_per_year": rf(7, "om_per_year"),
+            "revenue_per_year": rf(8, "revenue_per_year"),
+            "discount_rate": rf(9, "discount_rate"),
+            "contingency": rf(10, "contingency"),
+            "profit_margin": rf(11, "profit_margin"),
+            "actual_design_progress": actual_design,
+            "actual_build_progress": actual_build,
+            "target_design_progress": target_design,
+            "target_build_progress": target_build,
             "design_shares": {
-                "vendor": float(row.iloc[16]),
-                "AE": float(row.iloc[17]),
-                "constructor": float(row.iloc[18]),
-                "utility": float(row.iloc[19]),
+                "vendor": rf(16, "design share vendor (Q)"),
+                "AE": rf(17, "design share AE (R)"),
+                "constructor": rf(18, "design share constructor (S)"),
+                "utility": rf(19, "design share utility (T)"),
             },
             "build_shares": {
-                "vendor": float(row.iloc[20]),
-                "AE": float(row.iloc[21]),
-                "constructor": float(row.iloc[22]),
-                "utility": float(row.iloc[23]),
+                "vendor": rf(20, "build share vendor (U)"),
+                "AE": rf(21, "build share AE (V)"),
+                "constructor": rf(22, "build share constructor (W)"),
+                "utility": rf(23, "build share utility (X)"),
             },
             "om_shares": {
-                "vendor": float(row.iloc[24]),
-                "AE": float(row.iloc[25]),
-                "constructor": float(row.iloc[26]),
-                "utility": float(row.iloc[27]),
+                "vendor": rf(24, "O&M share vendor (Y)"),
+                "AE": rf(25, "O&M share AE (Z)"),
+                "constructor": rf(26, "O&M share constructor (AA)"),
+                "utility": rf(27, "O&M share utility (AB)"),
             },
             "revenue_shares": {
-                "vendor": float(row.iloc[28]),
-                "AE": float(row.iloc[29]),
-                "constructor": float(row.iloc[30]),
-                "utility": float(row.iloc[31]),
+                "vendor": rf(28, "revenue share vendor (AC)"),
+                "AE": rf(29, "revenue share AE (AD)"),
+                "constructor": rf(30, "revenue share constructor (AE)"),
+                "utility": rf(31, "revenue share utility (AF)"),
             },
         }
+
+    def _should_use_cost_risk_positional(self, df, lookup):
+        """Use A–AF indices when we have 32+ columns but no recognizable *design_cost* header."""
+        if df.shape[1] < 32:
+            return False
+        return self._norm_header("design_cost") not in lookup
+
+    def _inputs_from_csv_row(self, df, row_idx):
+        """Build PDSystems inputs: **cost_risk_inputs** A–AF layout (by header or by position)."""
+        lookup = self._header_lookup(df)
+        row = df.iloc[row_idx]
+        rn = row_idx + 1
+
+        if self._should_use_cost_risk_positional(df, lookup):
+            return self._inputs_from_positional_cost_risk_row(row, rn)
+
+        def f(*a, label=None):
+            return self._cell_req_float(row, lookup, rn, *a, label=label)
+
+        def i(*a, label=None):
+            return self._cell_req_int(row, lookup, rn, *a, label=label)
+
+        name = self._cell_raw(
+            row,
+            lookup,
+            "name",
+            "run_name",
+            "descriptor",
+            "project_name",
+            "scenario",
+            "case_id",
+        ) or f"row_{rn}"
+
+        actual_design = self._parse_progress_cell(
+            self._cell_raw(
+                row,
+                lookup,
+                "actual_design_progress",
+                "actual_design",
+                "design_progress_actual",
+                "as_built_design_progress",
+                "actual_design_progress_(%)",
+            )
+        )
+        actual_build = self._parse_progress_cell(
+            self._cell_raw(
+                row,
+                lookup,
+                "actual_build_progress",
+                "actual_build",
+                "build_progress_actual",
+                "as_built_build_progress",
+                "actual_build_progress_(%)",
+            )
+        )
+        if not actual_design:
+            raise ValueError(f"Row {rn}: actual_design_progress is missing or empty.")
+        if not actual_build:
+            raise ValueError(f"Row {rn}: actual_build_progress is missing or empty.")
+
+        td_raw = self._cell_raw(
+            row,
+            lookup,
+            "target_design_progress",
+            "target_design",
+            "planned_design_progress",
+            "baseline_design_progress",
+            "target_design_progress_(%)",
+        )
+        tb_raw = self._cell_raw(
+            row,
+            lookup,
+            "target_build_progress",
+            "target_build",
+            "planned_build_progress",
+            "baseline_build_progress",
+            "target_build_progress_(%)",
+        )
+        target_design = self._parse_progress_cell(td_raw) if td_raw else list(actual_design)
+        target_build = self._parse_progress_cell(tb_raw) if tb_raw else list(actual_build)
+
+        return {
+            "name": name,
+            "operating_time": i("operating_time", label="operating_time"),
+            "design_time": i("design_time", label="design_time"),
+            "build_time": i("build_time", label="build_time"),
+            "commission_time": i("commission_time", label="commission_time"),
+            "design_cost": f("design_cost", label="design_cost"),
+            "build_cost": f("build_cost", label="build_cost"),
+            "om_per_year": f("om_per_year", "OM_per_year", "o&m_per_year", label="om_per_year"),
+            "revenue_per_year": f("revenue_per_year", label="revenue_per_year"),
+            "discount_rate": f("discount_rate", label="discount_rate"),
+            "contingency": f("contingency", label="contingency"),
+            "profit_margin": f("profit_margin", label="profit_margin"),
+            "actual_design_progress": actual_design,
+            "actual_build_progress": actual_build,
+            "target_design_progress": target_design,
+            "target_build_progress": target_build,
+            "design_shares": {
+                "vendor": f("design_vendor", "vendor_design", label="design vendor share"),
+                "AE": f("design_ae", "ae_design", label="design AE share"),
+                "constructor": f("design_constructor", "constructor_design", label="design constructor share"),
+                "utility": f("design_utility", "utility_design", label="design utility share"),
+            },
+            "build_shares": {
+                "vendor": f("build_vendor", "vendor_build", label="build vendor share"),
+                "AE": f("build_ae", "ae_build", label="build AE share"),
+                "constructor": f("build_constructor", "constructor_build", label="build constructor share"),
+                "utility": f("build_utility", "utility_build", label="build utility share"),
+            },
+            "om_shares": {
+                "vendor": f("om_vendor", "vendor_om", label="O&M vendor share"),
+                "AE": f("om_ae", "ae_om", label="O&M AE share"),
+                "constructor": f("om_constructor", "constructor_om", label="O&M constructor share"),
+                "utility": f("om_utility", "utility_om", label="O&M utility share"),
+            },
+            "revenue_shares": {
+                "vendor": f("revenue_vendor", "vendor_rev", label="revenue vendor share"),
+                "AE": f("revenue_ae", "ae_rev", label="revenue AE share"),
+                "constructor": f("revenue_constructor", "constructor_rev", label="revenue constructor share"),
+                "utility": f("revenue_utility", "utility_rev", label="revenue utility share"),
+            },
+        }
+
+    def _apply_inputs_to_form(self, inputs):
+        """Fill GUI entries from a PDSystems-style inputs dict (e.g. first CSV row)."""
+        self.entries["name"].delete(0, tk.END)
+        self.entries["name"].insert(0, str(inputs.get("name", "")))
+
+        for k in (
+            "operating_time",
+            "design_time",
+            "build_time",
+            "commission_time",
+            "design_cost",
+            "build_cost",
+            "revenue_per_year",
+            "om_per_year",
+            "discount_rate",
+            "contingency",
+            "profit_margin",
+        ):
+            self.entries[k].delete(0, tk.END)
+            self.entries[k].insert(0, str(inputs[k]))
+
+        for prog in (
+            "actual_design_progress",
+            "actual_build_progress",
+            "target_design_progress",
+            "target_build_progress",
+        ):
+            self.entries[prog].delete(0, tk.END)
+            self.entries[prog].insert(0, ",".join(str(x) for x in inputs[prog]))
+
+        for actor in ("vendor", "AE", "constructor", "utility"):
+            self.share_entries[f"design_{actor}"].delete(0, tk.END)
+            self.share_entries[f"design_{actor}"].insert(0, str(inputs["design_shares"][actor]))
+            self.share_entries[f"build_{actor}"].delete(0, tk.END)
+            self.share_entries[f"build_{actor}"].insert(0, str(inputs["build_shares"][actor]))
+            self.share_entries[f"om_{actor}"].delete(0, tk.END)
+            self.share_entries[f"om_{actor}"].insert(0, str(inputs["om_shares"][actor]))
+            self.share_entries[f"revenue_{actor}"].delete(0, tk.END)
+            self.share_entries[f"revenue_{actor}"].insert(0, str(inputs["revenue_shares"][actor]))
 
     def collect_inputs(self):
         data = {}
@@ -281,68 +575,19 @@ class App:
         self.loaded_df = df
         self.loaded_csv_path = path
 
-        row = df.iloc[0]
-
-        mapping = {
-            "name": 0,                    # A
-            "operating_time": 1,          # B
-            "design_time": 2,             # C
-            "build_time": 3,              # D
-            "commission_time": 4,         # E
-            "design_cost": 5,             # F
-            "build_cost": 6,              # G
-            "om_per_year": 7,             # H
-            "revenue_per_year": 8,        # I
-            "discount_rate": 9,           # J
-            "contingency": 10,            # K
-            "profit_margin": 11,          # L
-            "actual_design_progress": 12, # M
-            "actual_build_progress": 13,  # N
-            "target_design_progress": 14, # O
-            "target_build_progress": 15,  # P
-        }
-
-        for key, col_idx in mapping.items():
-
-            value = row.iloc[col_idx]
-
-            self.entries[key].delete(0, tk.END)
-            self.entries[key].insert(0, str(value))
-
-
-        share_mapping = {
-            # DESIGN
-            "design_vendor": 16,       # Q
-            "design_AE": 17,           # R
-            "design_constructor": 18,  # S
-            "design_utility": 19,      # T
-
-            # BUILD
-            "build_vendor": 20,        # U
-            "build_AE": 21,            # V
-            "build_constructor": 22,   # W
-            "build_utility": 23,       # X
-
-            # OM
-            "om_vendor": 24,           # Y
-            "om_AE": 25,               # Z
-            "om_constructor": 26,      # AA
-            "om_utility": 27,          # AB
-
-            # REVENUE
-            "revenue_vendor": 28,      # AC
-            "revenue_AE": 29,          # AD
-            "revenue_constructor": 30, # AE
-            "revenue_utility": 31,     # AF
-        }
-
-        for key, col_idx in share_mapping.items():
-
-            value = row.iloc[col_idx]
-
-            if key in self.share_entries:
-                self.share_entries[key].delete(0, tk.END)
-                self.share_entries[key].insert(0, str(value))
+        try:
+            inputs = self._inputs_from_csv_row(df, 0)
+            self._apply_inputs_to_form(inputs)
+        except Exception as e:
+            self.loaded_df = None
+            self.loaded_csv_path = None
+            messagebox.showerror(
+                "CSV header error",
+                f"Could not map columns from the first data row:\n{e}\n\n"
+                "Use **cost_risk_inputs** headers (e.g. design_cost, actual_design_progress, design_vendor) "
+                "or 32+ columns A–AF with recognizable headers. See script docstring for layout.",
+            )
+            return
 
         n = len(df)
         messagebox.showinfo(
@@ -367,10 +612,11 @@ class App:
 
         output_rows = []
 
-        for row_idx, (_, row) in enumerate(df.iterrows()):
+        for row_idx in range(len(df)):
+            row = df.iloc[row_idx]
 
             try:
-                inputs = self._inputs_from_csv_row(row)
+                inputs = self._inputs_from_csv_row(df, row_idx)
 
                 model = PDSystems(inputs)
 
