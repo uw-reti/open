@@ -158,8 +158,8 @@ class PDSystems:
             return idx + 1
 
         #determine actual payout years from actual progress arrays
-        self.build_payout_year = completion_payout_year(self.actual_build_progress)
-        self.build_target_payout_year = completion_payout_year(self.target_build_progress)
+        self.build_payout_year = completion_payout_year(self.actual_build_progress)+len(self.actual_design_progress)
+        self.build_target_payout_year = completion_payout_year(self.target_build_progress)+len(self.target_design_progress)
 
         #this could be an optional true/false "button" where we can decide if we want to wait to pay out design until after build is complete
         self.fp_design_payout_milestone = True
