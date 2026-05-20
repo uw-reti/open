@@ -88,13 +88,13 @@ class PDSystems:
         self.NPV = {}
 
 
-    """a fxn that returns the first index where progress >= 100; else return None."""
+    #fxn that returns the first index where progress >= 100; else return None."""
     def completion_index(self,progress_array):
         idx = np.where(progress_array >= 100)[0]
         return int(idx[0]) if idx.size > 0 else None
 
     
-    """a fxn that maps a sample index i (0-based) from a progress array of length n_years into a year within the phase: an integer in [phase_start, phase_start + phase_length - 1]."""
+    #fxn that maps a sample index i (0-based) from a progress array of length n_years into a year within the phase: an integer in [phase_start, phase_start + phase_length - 1]."""
     def map_sample_to_phase_year(self,i, n_years, phase_start, phase_length):
         if n_years <= 0:
             raise ValueError("n_years must be > 0")
@@ -103,7 +103,7 @@ class PDSystems:
         year_within = max(0, min(phase_length - 1, year_within))
         return int(phase_start + year_within)
 
-    """a fxn that maps a cumulative progress (0..100%) to an absolute model year within the phase: an integer in [phase_start, phase_start + phase_length - 1]."""
+    #fxn that maps a cumulative progress (0..100%) to an absolute model year within the phase: an integer in [phase_start, phase_start + phase_length - 1]
     def map_cumulative_progress_to_phase_year(self, cum_pct, phase_start, phase_length):
         """Uses the same spacing rule as map_sample_to_phase_year but with completion
         fraction p = cum_pct/100 instead of p = (i+1)/n_years. Cash tied to *earned*
@@ -119,7 +119,7 @@ class PDSystems:
         year_within = max(0, min(pl - 1, year_within))
         return int(phase_start + year_within)
 
-    """a fxn that returns the absolute year when build progress reaches 100% (map sample index to a year). If build never reaches 100%, return None."""
+    #fxn that returns the absolute year when build progress reaches 100% (map sample index to a year). If build never reaches 100%, returns None
     def build_completion_payout_year(self,actual_build_progress, design_time, build_time):
         idx = self.completion_index(actual_build_progress)
         if idx is None:
@@ -139,6 +139,36 @@ class PDSystems:
         print("  Utility NPV:    ", self.NPV["utility"])
         print("  AE NPV:         ", self.NPV["AE"])
         print("  Constructor NPV:", self.NPV["constructor"])
+
+    def print_npv_timepaths(self, model_name):
+        #this prints cumulative discounted NPV by year for each actor in the console
+        if not self.NPV_timepath:
+            return
+
+        col_w = 14
+        sep = "=" * (6 + col_w * len(self.actors))
+
+        print()
+        print(sep)
+        print(f"  {model_name} — cumulative NPV by year")
+        print(sep)
+
+        header = f"{'year':>6}" + "".join(f"{actor:>{col_w}}" for actor in self.actors)
+        print(header)
+        print("-" * len(header))
+
+        for i, y in enumerate(self.year):
+            row = f"{int(y):>6}"
+            for actor in self.actors:
+                row += f"{self.NPV_timepath[actor][i]:>{col_w},.2f}"
+            print(row)
+
+        print("-" * len(header))
+        final = f"{'final':>6}"
+        for actor in self.actors:
+            final += f"{self.NPV[actor]:>{col_w},.2f}"
+        print(final)
+        print()
 
 
 
@@ -220,6 +250,7 @@ class PDSystems:
         print("Build payout year (computed):", self.build_payout_year)
         print("Revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
         self.NPVprint()
+        self.print_npv_timepaths("Fixed price")
 
 
 
@@ -384,6 +415,7 @@ class PDSystems:
         print("Revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
 
         self.NPVprint()
+        self.print_npv_timepaths("Cost plus")
 
 
 
@@ -521,3 +553,4 @@ class PDSystems:
         print("Revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
 
         self.NPVprint()
+        self.print_npv_timepaths("IPD")

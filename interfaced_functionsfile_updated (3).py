@@ -3,20 +3,10 @@ import re
 import sys
 from pathlib import Path
 
-# If the IDE "Run" button uses a global Python without your deps, re-run using this folder's .venv.
-_root = Path(__file__).resolve().parent
-_script = Path(__file__).resolve()
-_venv_python = _root / ".venv" / "Scripts" / "python.exe"
-if _venv_python.is_file():
-    try:
-        _wrong_interpreter = Path(sys.executable).resolve() != _venv_python.resolve()
-    except OSError:
-        _wrong_interpreter = True
-    if _wrong_interpreter:
-        import subprocess
+from venv_bootstrap import maybe_reexec_with_venv
 
-        rc = subprocess.call([str(_venv_python), str(_script), *sys.argv[1:]])
-        raise SystemExit(rc)
+# Use this folder's .venv when it works here; repair/recreate if copied from another PC (e.g. OneDrive).
+maybe_reexec_with_venv(Path(__file__).resolve())
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -474,6 +464,21 @@ class App:
             self.share_entries[f"revenue_{actor}"].delete(0, tk.END)
             self.share_entries[f"revenue_{actor}"].insert(0, str(inputs["revenue_shares"][actor]))
 
+    ACTORS = ("vendor", "AE", "constructor", "utility")
+
+    @classmethod
+    def _per_actor_npv_columns(cls, model_prefix, npv_dict):
+        """CSV columns e.g. fixed_price_npv_vendor from model.NPV after a run."""
+        return {f"{model_prefix}_npv_{actor}": npv_dict[actor] for actor in cls.ACTORS}
+
+    @classmethod
+    def _empty_per_actor_npv_columns(cls):
+        return {
+            f"{prefix}_npv_{actor}": None
+            for prefix in ("fixed_price", "cost_plus", "ipd")
+            for actor in cls.ACTORS
+        }
+
     def collect_inputs(self):
         data = {}
 
@@ -513,40 +518,24 @@ class App:
 
         model.fixed_price()
         fp_npv = dict(model.NPV)
-        fp_total = sum(fp_npv.values())
+        #fp_total = sum(fp_npv.values())
 
         model.cost_plus()
         cp_npv = dict(model.NPV)
-        cp_total = sum(cp_npv.values())
+        #cp_total = sum(cp_npv.values())
 
         model.ipd()
         ipd_npv = dict(model.NPV)
-        ipd_total = sum(ipd_npv.values())
+        #ipd_total = sum(ipd_npv.values())
 
         self.results = {
             "fixed_price": fp_npv,
             "cost_plus": cp_npv,
             "ipd": ipd_npv,
         }
-        self.results["_totals"] = {
-            "fixed_price_NPV": fp_total,
-            "cost_plus_NPV": cp_total,
-            "IPD_NPV": ipd_total,
-        }
 
-        # show results
         for widget in self.results_tab.winfo_children():
             widget.destroy()
-
-        tk.Label(
-            self.results_tab,
-            text=(
-                f"Total NPV (all actors), fixed price: {fp_total:,.2f}\n"
-                f"Total NPV (all actors), cost plus: {cp_total:,.2f}\n"
-                f"Total NPV (all actors), IPD: {ipd_total:,.2f}"
-            ),
-            justify="left",
-        ).pack(anchor="w", pady=(0, 8))
 
         for title, npv_dict in (
             ("Fixed price (per actor)", fp_npv),
@@ -593,7 +582,7 @@ class App:
         messagebox.showinfo(
             "CSV loaded",
             f"Loaded {n} data row(s) below the header. The form shows the first data row.\n"
-            "Use Export CSV to run every data row and append all three NPV totals.",
+            "Use Export CSV to run every data row and append per-actor NPV columns.",
         )
 
     def export_csv(self):
@@ -621,27 +610,25 @@ class App:
                 model = PDSystems(inputs)
 
                 model.fixed_price()
-                fixed_price_npv = sum(model.NPV.values())
+                fp_npv = dict(model.NPV)
 
                 model.cost_plus()
-                cost_plus_npv = sum(model.NPV.values())
+                cp_npv = dict(model.NPV)
 
                 model.ipd()
-                ipd_npv = sum(model.NPV.values())
+                ipd_npv = dict(model.NPV)
 
                 output_row = row.to_dict()
                 output_row["csv_row_index"] = row_idx
-                output_row["fixed_price_NPV"] = fixed_price_npv
-                output_row["cost_plus_NPV"] = cost_plus_npv
-                output_row["IPD_NPV"] = ipd_npv
+                output_row.update(self._per_actor_npv_columns("fixed_price", fp_npv))
+                output_row.update(self._per_actor_npv_columns("cost_plus", cp_npv))
+                output_row.update(self._per_actor_npv_columns("ipd", ipd_npv))
                 output_row["batch_error"] = ""
 
             except Exception as e:
                 output_row = row.to_dict()
                 output_row["csv_row_index"] = row_idx
-                output_row["fixed_price_NPV"] = None
-                output_row["cost_plus_NPV"] = None
-                output_row["IPD_NPV"] = None
+                output_row.update(self._empty_per_actor_npv_columns())
                 output_row["batch_error"] = str(e)
 
             output_rows.append(output_row)
