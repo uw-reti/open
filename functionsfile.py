@@ -85,6 +85,8 @@ class PDSystems:
         self.ipd_disc_revenue = {}
 
         self.NPV_timepath = {}
+        self.cost_timepath = {}
+        self.revenue_timepath = {}
         self.NPV = {}
 
 
@@ -139,18 +141,18 @@ class PDSystems:
         print("  Utility NPV:    ", self.NPV["utility"])
         print("  AE NPV:         ", self.NPV["AE"])
         print("  Constructor NPV:", self.NPV["constructor"])
+        
 
-    def print_npv_timepaths(self, model_name):
+    def print_npv_timepaths(self, model_name, timepath,output):
         #this prints cumulative discounted NPV by year for each actor in the console
-        if not self.NPV_timepath:
+        if not timepath:
             return
-
         col_w = 14
         sep = "=" * (6 + col_w * len(self.actors))
 
         print()
         print(sep)
-        print(f"  {model_name} — cumulative NPV by year")
+        print(f"  {model_name} — cumulative {output} by year")
         print(sep)
 
         header = f"{'year':>6}" + "".join(f"{actor:>{col_w}}" for actor in self.actors)
@@ -160,16 +162,16 @@ class PDSystems:
         for i, y in enumerate(self.year):
             row = f"{int(y):>6}"
             for actor in self.actors:
-                row += f"{self.NPV_timepath[actor][i]:>{col_w},.2f}"
+                row += f"{timepath[actor][i]:>{col_w},.2f}"
             print(row)
-
+        
         print("-" * len(header))
         final = f"{'final':>6}"
         for actor in self.actors:
-            final += f"{self.NPV[actor]:>{col_w},.2f}"
+            final += f"{timepath[actor][-1]:>{col_w},.2f}"
         print(final)
         print()
-
+    
 
 
     """FIXED PRICE"""
@@ -243,6 +245,11 @@ class PDSystems:
             self.net_disc[actor] = -self.disc_costs[actor] + self.fp_disc_revenue[actor]
             #npv cumulative sums (NPV at each year)
             self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
+            #cumulative costs
+            self.cost_timepath[actor] = np.cumsum(self.disc_costs[actor])
+            #cumulative revenues
+            self.revenue_timepath[actor] = np.cumsum(self.fp_disc_revenue[actor])
+            
             # total NPV (end of timeline)
             self.NPV[actor] = float(self.NPV_timepath[actor][-1])
 
@@ -250,8 +257,9 @@ class PDSystems:
         print("Build payout year (computed):", self.build_payout_year)
         print("Revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
         self.NPVprint()
-        self.print_npv_timepaths("Fixed price")
-
+        self.print_npv_timepaths("Fixed price",self.NPV_timepath,"NPV")
+        self.print_npv_timepaths("Fixed price",self.cost_timepath,"Costs")
+        self.print_npv_timepaths("Fixed price",self.revenue_timepath,"Revenue")
 
 
     """COST+"""
@@ -297,13 +305,9 @@ class PDSystems:
             
             self.n_year = len(progress_array)
             self.payments = {k: np.zeros_like(self.year, dtype=float) for k in shares.keys()}
-            """from ben"""
             self.cum_progress_frac = progress_array / 100.0
             
-            delta_cum_progress_frac = [0]
-            for j in range(self.n_year-1):
-                delta_cum_progress_frac.append(self.cum_progress_frac[j+1] - self.cum_progress_frac[j])
-            #print(delta_cum_progress_frac)
+            delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
 
             for i in range(self.n_year):
                 # Pay this increment when cumulative actual progress reaches progress_array[i] (not by sample index alone).
@@ -404,6 +408,11 @@ class PDSystems:
             
             #npv cumulative sums (NPV at each year)
             self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
+            #cumulative costs
+            self.cost_timepath[actor] = np.cumsum(self.cp_disc_revenue[actor])
+            #cumulative revenues
+            self.revenue_timepath[actor] = np.cumsum(self.cp_disc_costs[actor])
+            
             # total NPV (end of timeline)
             self.NPV[actor] = float(self.NPV_timepath[actor][-1])
 
@@ -415,8 +424,9 @@ class PDSystems:
         print("Revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
 
         self.NPVprint()
-        self.print_npv_timepaths("Cost plus")
-
+        self.print_npv_timepaths("Cost plus",self.NPV_timepath,"NPV")
+        self.print_npv_timepaths("Cost plus",self.cost_timepath,"Costs")
+        self.print_npv_timepaths("Cost plus",self.revenue_timepath,"Revenue")
 
 
     """IPD"""
@@ -553,4 +563,4 @@ class PDSystems:
         print("Revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
 
         self.NPVprint()
-        self.print_npv_timepaths("IPD")
+        self.print_npv_timepaths("IPD",self.NPV_timepath,"NPV")

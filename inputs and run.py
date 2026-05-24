@@ -91,8 +91,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from functionsfile import PDSystems
-
 actors = ("vendor", "AE", "constructor", "utility")
 pds = ("fixed_price", "cost_plus", "ipd")
 
@@ -180,8 +178,8 @@ def main():
     for idx in range(len(df)):
         row = df.iloc[idx]
         record = row.to_dict()
+        npvs = run_models(row_to_inputs(row))
         try:
-            npvs = run_models(row_to_inputs(row))
             for model in pds:
                 for actor in actors:
                     record[f"{model}_npv_{actor}"] = npvs[model][actor]
@@ -194,3 +192,6 @@ def main():
 
     pd.DataFrame(results).to_csv(output_csv, index=False)
     print(f"Wrote {len(results)} row(s) to {output_csv}")
+
+if __name__ == "__main__":
+    main()
