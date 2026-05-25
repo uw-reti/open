@@ -278,10 +278,7 @@ class PDSystems:
             """from ben"""
             self.cum_progress_frac = progress_array / 100.0
             
-            delta_cum_progress_frac = [0]
-            for j in range(self.n_year-1):
-                delta_cum_progress_frac.append(self.cum_progress_frac[j+1] - self.cum_progress_frac[j])
-            #print(delta_cum_progress_frac)
+            delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
 
             for i in range(self.n_year):
                 # which year to assign this sample's payment to
@@ -359,15 +356,18 @@ class PDSystems:
         phase_length=self.build_time,
         shares=self.percent_build,
         )
+        
+        
 
         # Utility may get revenue share from build/design payments if configured (here percent_design_utility = 0)
         self.cp_nondisc_utility_revenue = self.design_payments["utility"] + self.build_payments["utility"]
         
         #set the costplus markup
-        self.markup = (1 + self.contingency) * (1 + self.profit_margin) #BL: I believe that contingency shouldnt be applied on cost-plus
+        self.markup = (1 + self.profit_margin) #BL: I believe that contingency shouldnt be applied on cost-plus
         
         # Utility operational revenue (annual), starts only after build is completed + commissioning
         # Determine actual build completion year mapped to timeline
+        #TODO: this doesnt currently configure to let others take a share of the profit. Need to expand to all actors
         self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.design_time, self.build_time)
         if self.build_payout_year is not None:
             self.revenue_start_actual = self.build_payout_year + self.commission_time
@@ -382,7 +382,6 @@ class PDSystems:
         else:
             # build never completed -> no operational utility revenue
             pass
-        
         
         for actor in self.actors:
             self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor])
@@ -409,9 +408,9 @@ class PDSystems:
             #npv cumulative sums (NPV at each year)
             self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
             #cumulative costs
-            self.cost_timepath[actor] = np.cumsum(self.cp_disc_revenue[actor])
+            self.cost_timepath[actor] = np.cumsum(self.cp_disc_costs[actor])
             #cumulative revenues
-            self.revenue_timepath[actor] = np.cumsum(self.cp_disc_costs[actor])
+            self.revenue_timepath[actor] = np.cumsum(self.cp_disc_revenue[actor])
             
             # total NPV (end of timeline)
             self.NPV[actor] = float(self.NPV_timepath[actor][-1])
