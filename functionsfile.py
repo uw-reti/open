@@ -33,10 +33,10 @@ class PDSystems:
         self.target_design_progress = np.array(inputs["target_design_progress"])
         self.target_build_progress = np.array(inputs["target_build_progress"])
 
-        self.percent_design = inputs["design_shares"]
-        self.percent_build = inputs["build_shares"]
-        self.percent_OM_to = inputs["om_shares"]
-        self.percent_revenue_to = inputs["revenue_shares"]
+        self.percent_design = inputs["percent_design"]
+        self.percent_build = inputs["percent_build"]
+        self.percent_OM_to = inputs["percent_OM_to"]
+        self.percent_revenue_to = inputs["percent_revenue_to"]
 
         self.actors = ["vendor", "AE", "constructor", "utility"]
 

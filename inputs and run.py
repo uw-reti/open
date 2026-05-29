@@ -124,25 +124,25 @@ def row_to_inputs(row):
         "actual_build_progress": actual_build,
         "target_design_progress": target_design,
         "target_build_progress": target_build,
-        "design_shares": {
+        "percent_design": {
             "vendor": f(row.iloc[16]),
             "AE": f(row.iloc[17]),
             "constructor": f(row.iloc[18]),
             "utility": f(row.iloc[19]),
         },
-        "build_shares": {
+        "percent_build": {
             "vendor": f(row.iloc[20]),
             "AE": f(row.iloc[21]),
             "constructor": f(row.iloc[22]),
             "utility": f(row.iloc[23]),
         },
-        "om_shares": {
+        "percent_OM_to": {
             "vendor": f(row.iloc[24]),
             "AE": f(row.iloc[25]),
             "constructor": f(row.iloc[26]),
             "utility": f(row.iloc[27]),
         },
-        "revenue_shares": {
+        "percent_revenue_to": {
             "vendor": f(row.iloc[28]),
             "AE": f(row.iloc[29]),
             "constructor": f(row.iloc[30]),
