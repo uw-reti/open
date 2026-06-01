@@ -2,6 +2,7 @@
 """
 BL TODOs:
     - At the moment build_cost is not variable (needs target and actual)
+    - add in liquidated damage % per year option? -> that way we can quantify losses for being behind schedule better
 """
 
 import numpy as np
@@ -41,11 +42,15 @@ class PDSystems:
         self.actors = ["vendor", "AE", "constructor", "utility"]
 
 
-        self.year = np.arange(0, self.operating_time + self.design_time + self.build_time + self.commission_time)
+        self.target_year = np.arange(0, self.operating_time + self.design_time + self.build_time + self.commission_time)
+        self.actual_design_time = len(self.actual_design_progress)
+        self.actual_build_time = len(self.actual_build_progress)
+        self.actual_year = np.arange(0, self.actual_design_time + self.actual_build_time + self.commission_time + self.operating_time)
+        
         self.target_progress = np.append(self.target_design_progress, self.target_build_progress)
         self.actual_progress = np.append(self.actual_design_progress, self.actual_build_progress)
 
-        self.progress_array = np.zeros_like(self.year)
+        self.progress_array = np.zeros_like(self.actual_year)
         end_index = len(self.actual_progress)
         self.progress_array[:end_index] = self.actual_progress
         """start_index = 0
@@ -53,15 +58,12 @@ class PDSystems:
         progress_array[start_index:end_index] = actual_progress"""
 
         #Setup masks
-        self.actual_design_time = len(self.actual_design_progress)
-        self.actual_build_time = len(self.actual_build_progress)
-
-        self.mask_design = self.year < self.actual_design_time
+        self.mask_design = self.actual_year < self.actual_design_time
         self.mask_build = (
-            (self.year >= self.actual_design_time)
-            & (self.year < self.actual_design_time + self.actual_build_time)
+            (self.actual_year >= self.actual_design_time)
+            & (self.actual_year < self.actual_design_time + self.actual_build_time)
         )
-        self.mask_om = self.year >= (self.actual_design_time + self.actual_build_time)
+        self.mask_om = self.actual_year >= (self.actual_design_time + self.actual_build_time)
         #mask_design = year < actual_design_time
         #mask_build = (year >= actual_design_time) & (year < actual_design_time + actual_build_time)
         #mask_om = year >= (actual_design_time + actual_build_time)
@@ -97,10 +99,10 @@ class PDSystems:
 
     
     #fxn that maps a sample index i (0-based) from a progress array of length n_years into a year within the phase: an integer in [phase_start, phase_start + phase_length - 1]
-    def map_sample_to_phase_year(self,i, n_years, phase_start, phase_length):
-        if n_years <= 0:
-            raise ValueError("n_years must be > 0")
-        frac = (i + 1) / n_years
+    def map_sample_to_phase_year(self,i, n_year, phase_start, phase_length):
+        if n_year <= 0:
+            raise ValueError("years must be > 0")
+        frac = (i + 1) / n_year
         year_within = int(np.ceil(frac * phase_length)) - 1
         year_within = max(0, min(phase_length - 1, year_within))
         return int(phase_start + year_within)
@@ -122,14 +124,13 @@ class PDSystems:
         return int(phase_start + year_within)
 
     #fxn that returns the absolute year when build progress reaches 100% (map sample index to a year). If build never reaches 100%, returns None
-    def build_completion_payout_year(self,actual_build_progress, design_time, build_time):
+    def build_completion_payout_year(self, actual_build_progress, design_time, build_time):
         idx = self.completion_index(actual_build_progress)
         if idx is None:
             return None
         
-        n_years = len(actual_build_progress)
         # position fraction within build
-        frac = (idx + 1) / n_years
+        frac = (idx + 1) / self.actual_build_time
         year_within = int(np.ceil(frac * build_time))  # 1..build_time
         year_within = max(1, min(build_time, year_within))
         payout_year = design_time + year_within
@@ -159,7 +160,7 @@ class PDSystems:
         print(header)
         print("-" * len(header))
 
-        for i, y in enumerate(self.year):
+        for i, y in enumerate(self.actual_year):
             row = f"{int(y):>6}"
             for actor in self.actors:
                 row += f"{timepath[actor][i]:>{col_w},.2f}"
@@ -185,9 +186,9 @@ class PDSystems:
             """
             idx = self.completion_index(actual_progress)
             if idx is None:
-                return -1 #BL: you had logic later to use -1 if it went to the last year, so putting it here for conciseness
+                return 0 #-1 #BL: you had logic later to use -1 if it went to the last year, so putting it here for conciseness
             # payout year is the year after the progress index (e.g., if index 3 -> payout year 4)
-            return idx + 1
+            return idx #+ 1
 
         #determine actual payout years from actual progress arrays
         self.build_payout_year = completion_payout_year(self.actual_build_progress)+len(self.actual_design_progress)
@@ -207,8 +208,8 @@ class PDSystems:
 
         for actor in self.actors:
             #fixed price (fp) non-discounted revenues — MILESTONE ONLY 
-            self.nondisc_costs[actor]= np.zeros_like(self.year, dtype=float)
-            self.fp_nondisc_revenue[actor]= np.zeros_like(self.year, dtype=float)
+            self.nondisc_costs[actor]= np.zeros_like(self.actual_year, dtype=float)
+            self.fp_nondisc_revenue[actor]= np.zeros_like(self.actual_year, dtype=float)
 
         for actor in self.actors:
             #non-discounted costs
@@ -219,7 +220,7 @@ class PDSystems:
             # O&M period starts when revenue starts
             self.nondisc_costs[actor][self.mask_om] = self.OM_per_year * self.percent_OM_to[actor]
             #discounted costs
-            self.disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.year))
+            self.disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
             #payouts per actor per phase
             self.fp_design_payout_amount[actor] = (np.sum(self.disc_costs[actor][self.mask_design])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.design_target_payout_year
             self.fp_build_payout_amount[actor] = (np.sum(self.disc_costs[actor][self.mask_build])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.build_target_payout_year
@@ -234,15 +235,15 @@ class PDSystems:
             #utility rev: only begins after build completion + commissioning
             if self.build_payout_year is not None:
                 revenue_start_actual = self.build_payout_year + self.commission_time
-                if revenue_start_actual < len(self.year):
-                    self.fp_nondisc_revenue[actor][self.year >= revenue_start_actual] = self.revenue_per_year * self.percent_revenue_to[actor]
+                if revenue_start_actual < len(self.actual_year):
+                    self.fp_nondisc_revenue[actor][self.actual_year >= revenue_start_actual] = self.revenue_per_year * self.percent_revenue_to[actor]
                 else:
                     # if revenue start beyond timeline, no revenue is recorded
                     pass
                 
         for actor in self.actors:
             #fixed price discounted revenues
-            self.fp_disc_revenue[actor] = self.fp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.year)
+            self.fp_disc_revenue[actor] = self.fp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
             #net disc flows
             self.net_disc[actor] = -self.disc_costs[actor] + self.fp_disc_revenue[actor]
             #npv cumulative sums (NPV at each year)
@@ -264,6 +265,8 @@ class PDSystems:
         self.print_npv_timepaths("Fixed price",self.revenue_timepath,"Revenue")
 
 
+
+
     """COST+"""
     def cost_plus(self):
         self.completion_index(self.progress_array)
@@ -276,7 +279,7 @@ class PDSystems:
             delta_progress_fraction = (progress[i] - progress[i-1]) / 100, with progress[-1]=0. Each delta is assigned to the mapped year computed by map_sample_to_phase_year. """
             
             self.n_year = len(progress_array)
-            self.costs = {k: np.zeros_like(self.year, dtype=float) for k in shares.keys()}
+            self.costs = {k: np.zeros_like(self.n_year, dtype=float) for k in shares.keys()}
             """from ben"""
             self.cum_progress_frac = progress_array / 100.0
             
@@ -289,7 +292,7 @@ class PDSystems:
                 # guard: if pay_year outside timeline, cap to last year
                 #if pay_year < 0:
                 #    pay_year = 0
-                if self.pay_year >= len(self.year):
+                if self.pay_year >= len(self.n_year):
                     continue
 
                 for actor, share in shares.items():
@@ -304,7 +307,7 @@ class PDSystems:
             (map_cumulative_progress_to_phase_year), so delayed/back-loaded curves move cash later vs index-only mapping."""
             
             self.n_year = len(progress_array)
-            self.payments = {k: np.zeros_like(self.year, dtype=float) for k in shares.keys()}
+            self.payments = {k: np.zeros_like(self.n_year, dtype=float) for k in shares.keys()}
             """from ben"""
             self.cum_progress_frac = progress_array / 100.0
             
@@ -312,13 +315,11 @@ class PDSystems:
 
             for i in range(self.n_year):
                 # Pay this increment when cumulative actual progress reaches progress_array[i] (not by sample index alone).
-                self.pay_year = self.map_cumulative_progress_to_phase_year(
-                    progress_array[i], phase_start, phase_length
-                )
+                self.pay_year = self.map_cumulative_progress_to_phase_year(progress_array[i], phase_start, phase_length)
                 # guard: if pay_year outside timeline, cap to last year
                 #if pay_year < 0:
                 #    pay_year = 0
-                if self.pay_year >= len(self.year):
+                if self.pay_year >= len(self.n_year):
                     continue
 
                 for actor, share in shares.items():
@@ -373,9 +374,9 @@ class PDSystems:
         self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.design_time, self.build_time)
         if self.build_payout_year is not None:
             self.revenue_start_actual = self.build_payout_year + self.commission_time
-            if self.revenue_start_actual < len(self.year):
-                self.cp_nondisc_utility_revenue[self.year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
-                self.cp_disc_utility_revenue = self.cp_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.year)
+            if self.revenue_start_actual < len(self.actual_year):
+                self.cp_nondisc_utility_revenue[self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
+                self.cp_disc_utility_revenue = self.cp_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.actual_year)
                 
                 #cp_disc_utility_revenue *= markup #BL: should the markup be applied here?
             else:
@@ -390,12 +391,12 @@ class PDSystems:
             self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor])
             self.cp_nondisc_revenue[actor] = (self.design_payments[actor] + self.build_payments[actor])
             
-            self.cp_disc_costs[actor] = np.zeros_like(self.year, dtype=float)
-            self.cp_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.year))
+            self.cp_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.cp_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
             #cp_disc_costs[actor] *= markup #BL: markup should only be applied to revenue, not costs
 
-            self.cp_disc_revenue[actor] = np.zeros_like(self.year, dtype=float)
-            self.cp_disc_revenue[actor] = np.array(self.cp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.year))
+            self.cp_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.cp_disc_revenue[actor] = np.array(self.cp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.cp_disc_revenue[actor] *= self.markup
         
         for actor in self.actors: #need to break this line out, once the arrays have been formed
@@ -431,6 +432,8 @@ class PDSystems:
         self.print_npv_timepaths("Cost plus",self.revenue_timepath,"Revenue")
 
 
+
+
     """IPD"""
     def ipd(self):
         self.completion_index(self.progress_array)
@@ -438,7 +441,7 @@ class PDSystems:
         def distribute_progress_costs(progress_array, phase_cost, phase_start, phase_length, shares):
           
             self.n_year = len(progress_array)
-            self.costs = {k: np.zeros_like(self.year, dtype=float) for k in shares.keys()}
+            self.costs = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
             self.cum_progress_frac = progress_array / 100.0
             
             #self.?
@@ -449,7 +452,7 @@ class PDSystems:
                 # guard: if pay_year outside timeline, cap to last year
                 #if pay_year < 0:
                 #    pay_year = 0
-                if self.pay_year >= len(self.year):
+                if self.pay_year >= len(self.actual_year):
                     continue
                 for actor, share in shares.items():
                     self.costs[actor][self.pay_year] += delta_cum_progress_frac[i] * phase_cost * share
@@ -459,7 +462,7 @@ class PDSystems:
             """Same cumulative-% timing as cost_plus: pay each increment in the phase year implied by progress_array[i]."""
             
             self.n_year = len(progress_array)
-            self.payments = {k: np.zeros_like(self.year, dtype=float) for k in shares.keys()}
+            self.payments = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
             self.cum_progress_frac = progress_array / 100.0
             
             delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
@@ -472,7 +475,7 @@ class PDSystems:
                 # guard: if pay_year outside timeline, cap to last year
                 #if pay_year < 0:
                 #    pay_year = 0
-                if self.pay_year >= len(self.year):
+                if self.pay_year >= len(self.actual_year):
                     continue
 
                 for actor, share in shares.items():
@@ -524,9 +527,9 @@ class PDSystems:
         self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.design_time, self.build_time)
         if self.build_payout_year is not None:
             self.revenue_start_actual = self.build_payout_year + self.commission_time
-            if self.revenue_start_actual < len(self.year):
-                self.ipd_nondisc_utility_revenue[self.year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
-                self.ipd_disc_utility_revenue = self.ipd_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.year)
+            if self.revenue_start_actual < len(self.actual_year):
+                self.ipd_nondisc_utility_revenue[self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
+                self.ipd_disc_utility_revenue = self.ipd_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.actual_year)
                 
                 self.ipd_disc_utility_revenue *= self.markup
             else:
@@ -540,11 +543,11 @@ class PDSystems:
             self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor])
             self.ipd_nondisc_revenue[actor] = (self.design_payments[actor] + self.build_payments[actor])
             
-            self.ipd_disc_costs[actor] = np.zeros_like(self.year, dtype=float)
-            self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.year))
+            self.ipd_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
 
-            self.ipd_disc_revenue[actor] = np.zeros_like(self.year, dtype=float)
-            self.ipd_disc_revenue[actor] = np.array(self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.year))
+            self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.ipd_disc_revenue[actor] = np.array(self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.ipd_disc_revenue[actor] *= self.markup
 
         for actor in self.actors: #need to break this line out, once the arrays have been formed
