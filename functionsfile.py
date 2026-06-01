@@ -2,7 +2,7 @@
 """
 BL TODOs:
     - At the moment build_cost is not variable (needs target and actual)
-    - add in liquidated damage % per year option? -> that way we can quantify losses for being behind schedule better
+    - add in liquidated damage % per year option? -> that way we can better quantify losses for being behind schedule
 """
 
 import numpy as np
@@ -186,9 +186,9 @@ class PDSystems:
             """
             idx = self.completion_index(actual_progress)
             if idx is None:
-                return 0 #-1 #BL: you had logic later to use -1 if it went to the last year, so putting it here for conciseness
+                return -1 #BL: you had logic later to use -1 if it went to the last year, so putting it here for conciseness
             # payout year is the year after the progress index (e.g., if index 3 -> payout year 4)
-            return idx #+ 1
+            return idx + 1
 
         #determine actual payout years from actual progress arrays
         self.build_payout_year = completion_payout_year(self.actual_build_progress)+len(self.actual_design_progress)
@@ -225,12 +225,13 @@ class PDSystems:
             self.fp_design_payout_amount[actor] = (np.sum(self.disc_costs[actor][self.mask_design])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.design_target_payout_year
             self.fp_build_payout_amount[actor] = (np.sum(self.disc_costs[actor][self.mask_build])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.build_target_payout_year
             
-            #----should I be separating the nondisc revenues into one for each phase or does this logic make sense? and maybe this is double counting utility?
             self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
             self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
-            #----is this why final values aren't adding up? is there a way to pass through just the other 3 actors and not utility?
-            self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.fp_design_payout_amount[actor]
-            self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
+            
+            # i think logic here makes sense -> not double counting bc removing what utility has to pay to others AND making sure utility doesn't subtract it's payout from itself
+            if actor != "utility":
+                self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.fp_design_payout_amount[actor]
+                self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
             
             #utility rev: only begins after build completion + commissioning
             if self.build_payout_year is not None:
