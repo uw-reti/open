@@ -136,6 +136,70 @@ class PDSystems:
         payout_year = actual_design_time + year_within
         return payout_year
 
+
+    """moved this up bc trying to keep consistent through cost+ and ipd and don't need duplicate now"""
+    def distribute_progress_costs(self, full_progress_array, phase_cost, phase_start, phase_length, shares):
+        """Convert a cumulative progress array (percent 0..100) into an annual payment array for each party in shares (dict with keys e.g. 'vendor','AE','constructor','utility').
+        Returns dict of arrays (same length as 'year' timeline). Payment for each party = delta_progress_fraction * phase_cost * party_share.
+        delta_progress_fraction = (progress[i] - progress[i-1]) / 100, with progress[-1]=0. Each delta is assigned to the mapped year computed by map_sample_to_phase_year. """
+        
+        self.n_year = len(full_progress_array)
+        self.costs = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
+        """from ben"""
+        self.cum_progress_frac = full_progress_array / 100.0
+        self.delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
+
+        for i in range(self.n_year):
+            # which year to assign this sample's payment to
+            #self.pay_year = self.map_sample_to_phase_year(self, i, n_year, phase_start, phase_length)
+            #changed this bc it was only calculating build costs at years 4 and 5 (mapping mightve been the problem)
+            self.pay_year = phase_start + i
+            # guard: if pay_year outside timeline, cap to last year
+            #if pay_year < 0:
+            #    pay_year = 0
+            if self.pay_year >= len(self.actual_year):
+                continue
+
+            for actor, share in shares.items():
+                self.costs[actor][self.pay_year] += self.delta_cum_progress_frac[i] * phase_cost * share
+                #print("CP non disc costs:", actor, pay_year, delta_cum_progress_frac[i] * phase_cost * share)
+        return self.costs
+
+
+    """also moved this up bc trying to keep consistent through cost+ and ipd and don't need duplicate now"""
+    def distribute_progress_payments(self, full_progress_array, phase_cost, phase_start, phase_length, shares):
+        """Convert a cumulative progress array (percent 0..100) into an annual payment array for each party in shares (dict with keys e.g. 'vendor','AE','constructor','utility').
+        Returns dict of arrays (same length as 'year' timeline). Payment for each party = delta_progress_fraction * phase_cost * party_share.
+        delta_progress_fraction = (progress[i] - progress[i-1]) / 100. Each increment is booked to the phase year when cumulative progress reaches progress[i]
+        (map_cumulative_progress_to_phase_year), so delayed/back-loaded curves move cash later vs index-only mapping."""
+        
+        self.n_year = len(full_progress_array)
+        self.payments = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
+        self.cum_progress_frac = full_progress_array / 100.0
+        print(self.cum_progress_frac)
+        self.delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
+        print(self.delta_cum_progress_frac)
+
+        for i in range(self.n_year):
+            # Pay this increment when cumulative actual progress reaches progress_array[i] (not by sample index alone).
+            """TODO: may need to change this to self.pay_year = phase_start + i too (look above)"""
+            #self.pay_year = self.map_cumulative_progress_to_phase_year(full_progress_array[i], phase_start, phase_length)
+            self.pay_year = phase_start + i
+            # guard: if pay_year outside timeline, cap to last year
+            #if pay_year < 0:
+            #    pay_year = 0
+            if self.pay_year >= len(self.actual_year):
+                continue
+
+            for actor, share in shares.items():
+                self.payments[actor][self.pay_year] += self.delta_cum_progress_frac[i] * phase_cost * share
+                #print("CP non disc payments:", actor, pay_year, delta_cum_progress_frac[i] * phase_cost * share)
+
+            print("progress =", full_progress_array[i])
+            print("pay_year =", self.pay_year)
+        
+        return self.payments
+
     #general print fxn for all
     def NPVprint(self):
         print("  Vendor NPV:     ", self.NPV["vendor"])
@@ -272,65 +336,10 @@ class PDSystems:
     def cost_plus(self):
         self.completion_index(self.full_progress_array)
 
-        def distribute_progress_costs(full_progress_array, phase_cost, phase_start, phase_length, shares):
-            """Convert a cumulative progress array (percent 0..100) into an annual payment array for each party in shares (dict with keys e.g. 'vendor','AE','constructor','utility').
-            Returns dict of arrays (same length as 'year' timeline). Payment for each party = delta_progress_fraction * phase_cost * party_share.
-            delta_progress_fraction = (progress[i] - progress[i-1]) / 100, with progress[-1]=0. Each delta is assigned to the mapped year computed by map_sample_to_phase_year. """
-            
-            self.n_year = len(full_progress_array)
-            self.costs = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
-            """from ben"""
-            self.cum_progress_frac = full_progress_array / 100.0
-            self.delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
-
-            for i in range(self.n_year):
-                # which year to assign this sample's payment to
-                #self.pay_year = self.map_sample_to_phase_year(self, i, n_year, phase_start, phase_length)
-                #changed this bc it was only calculating build costs at years 4 and 5 (mapping mightve been the problem)
-                self.pay_year = phase_start + i
-                # guard: if pay_year outside timeline, cap to last year
-                #if pay_year < 0:
-                #    pay_year = 0
-                if self.pay_year >= self.n_year:
-                    continue
-
-                for actor, share in shares.items():
-                    self.costs[actor][self.pay_year] += self.delta_cum_progress_frac[i] * phase_cost * share
-                    #print("CP non disc costs:", actor, pay_year, delta_cum_progress_frac[i] * phase_cost * share)
-            return self.costs
-
-        def distribute_progress_payments(full_progress_array, phase_cost, phase_start, phase_length, shares):
-            """Convert a cumulative progress array (percent 0..100) into an annual payment array for each party in shares (dict with keys e.g. 'vendor','AE','constructor','utility').
-            Returns dict of arrays (same length as 'year' timeline). Payment for each party = delta_progress_fraction * phase_cost * party_share.
-            delta_progress_fraction = (progress[i] - progress[i-1]) / 100. Each increment is booked to the phase year when cumulative progress reaches progress[i]
-            (map_cumulative_progress_to_phase_year), so delayed/back-loaded curves move cash later vs index-only mapping."""
-            
-            self.n_year = len(full_progress_array)
-            self.payments = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
-            self.cum_progress_frac = full_progress_array / 100.0
-            print(self.cum_progress_frac)
-            self.delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
-            print(self.delta_cum_progress_frac)
-
-            for i in range(self.n_year):
-                # Pay this increment when cumulative actual progress reaches progress_array[i] (not by sample index alone).
-                """TODO: may need to change this to self.pay_year = phase_start + i too (look above)"""
-                self.pay_year = self.map_cumulative_progress_to_phase_year(full_progress_array[i], phase_start, phase_length)
-                # guard: if pay_year outside timeline, cap to last year
-                #if pay_year < 0:
-                #    pay_year = 0
-                if self.pay_year >= self.n_year:
-                    continue
-
-                for actor, share in shares.items():
-                    self.payments[actor][self.pay_year] += self.delta_cum_progress_frac[i] * phase_cost * share
-                    #print("CP non disc payments:", actor, pay_year, delta_cum_progress_frac[i] * phase_cost * share)
-            return self.payments
-
         self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
 
         #partial progress costs and revenues
-        self.design_costs = distribute_progress_costs(
+        self.design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -339,7 +348,7 @@ class PDSystems:
         )
         print(self.design_costs)
 
-        self.build_costs = distribute_progress_costs(
+        self.build_costs = self.distribute_progress_costs(
         self.actual_build_progress,
         phase_cost=self.build_cost,
         phase_start=self.actual_design_time,
@@ -348,7 +357,7 @@ class PDSystems:
         )
         print(self.build_costs)
 
-        self.design_payments = distribute_progress_payments(
+        self.design_payments = self.distribute_progress_payments(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -357,7 +366,7 @@ class PDSystems:
         )
         print(self.design_payments)
 
-        self.build_payments = distribute_progress_payments(
+        self.build_payments = self.distribute_progress_payments(
         self.actual_build_progress,
         phase_cost=self.build_cost,
         phase_start=self.actual_design_time,
@@ -443,55 +452,10 @@ class PDSystems:
     def ipd(self):
         self.completion_index(self.full_progress_array)
          
-        def distribute_progress_costs(full_progress_array, phase_cost, phase_start, phase_length, shares):
-          
-            self.n_year = len(full_progress_array)
-            self.costs = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
-            self.cum_progress_frac = full_progress_array / 100.0
-            
-            #self.?
-            delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
-            
-            for i in range(self.n_year):
-                self.pay_year = self.map_sample_to_phase_year(i, self.n_year, phase_start, phase_length)
-                # guard: if pay_year outside timeline, cap to last year
-                #if pay_year < 0:
-                #    pay_year = 0
-                if self.pay_year >= self.n_year:
-                    continue
-                for actor, share in shares.items():
-                    self.costs[actor][self.pay_year] += delta_cum_progress_frac[i] * phase_cost * share
-            return self.costs
-
-        def distribute_progress_payments(full_progress_array, phase_cost, phase_start, phase_length, shares):
-            """Same cumulative-% timing as cost_plus: pay each increment in the phase year implied by progress_array[i]."""
-            
-            self.n_year = len(full_progress_array)
-            self.payments = {k: np.zeros_like(self.actual_year, dtype=float) for k in shares.keys()}
-            self.cum_progress_frac = full_progress_array / 100.0
-            
-            delta_cum_progress_frac = np.concatenate(([self.cum_progress_frac[0]], np.diff(self.cum_progress_frac)))
-            #print(delta_cum_progress_frac)
-
-            for i in range(self.n_year):
-                self.pay_year = self.map_cumulative_progress_to_phase_year(
-                    full_progress_array[i], phase_start, phase_length
-                )
-                # guard: if pay_year outside timeline, cap to last year
-                #if pay_year < 0:
-                #    pay_year = 0
-                if self.pay_year >= len(self.actual_year):
-                    continue
-
-                for actor, share in shares.items():
-                    self.payments[actor][self.pay_year] += delta_cum_progress_frac[i] * phase_cost * share
-                    #print("IPD non disc payments:", actor, pay_year, delta_cum_progress_frac[i] * phase_cost * share)
-            return self.payments
-
         self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
 
         #partial progress costs and revenues
-        self.design_costs = distribute_progress_costs(
+        self.design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -499,7 +463,7 @@ class PDSystems:
         shares=self.percent_design,
         )
 
-        self.build_costs = distribute_progress_costs(
+        self.build_costs = self.distribute_progress_costs(
         self.actual_build_progress,
         phase_cost=self.build_cost,
         phase_start=self.actual_design_time,
@@ -507,7 +471,7 @@ class PDSystems:
         shares=self.percent_build,
         )
 
-        self.design_payments = distribute_progress_payments(
+        self.design_payments = self.distribute_progress_payments(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -515,7 +479,7 @@ class PDSystems:
         shares=self.percent_design,
         )
 
-        self.build_payments = distribute_progress_payments(
+        self.build_payments = self.distribute_progress_payments(
         self.actual_build_progress,
         phase_cost=self.build_cost,
         phase_start=self.actual_design_time,
