@@ -69,6 +69,8 @@ class PDSystems:
         #mask_build = (year >= actual_design_time) & (year < actual_design_time + actual_build_time)
         #mask_om = year >= (actual_design_time + actual_build_time)
 
+        self.cp_nondisc_operating_revenue = np.zeros(len(self.actual_year))
+
         #Dictionaries for payouts
         self.nondisc_costs = {}
         self.disc_costs = {}
@@ -82,6 +84,7 @@ class PDSystems:
         self.cp_disc_costs = {}
         self.cp_nondisc_revenue = {}
         self.cp_disc_revenue = {}
+        #self.cp_nondisc_operating_revenue = {}
 
         self.ipd_disc_costs = {}
         self.ipd_nondisc_revenue = {}
@@ -325,9 +328,16 @@ class PDSystems:
 
         #print("Design payout year (computed):", self.design_payout_year)
         #print("Build payout year (computed):", self.build_payout_year)
-        print("Fixed Price revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
+        #print("Fixed Price revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
         print("Fixed Price  Utility NPV:    ", self.NPV["utility"])
         print("FP total project NPV:", self.NPV)
+        #print("FP Utility discounted costs:", np.sum(self.disc_costs["utility"]))
+        #print("FP Utility discounted revenues:", np.sum(self.fp_disc_revenue["utility"]))
+        print("FP build payout:", self.build_payout_year)
+        self.revenue_start_actual = self.build_payout_year + self.commission_time
+        print("FP revenue start:", self.revenue_start_actual)
+        print("FP timeline length:", len(self.actual_year))
+        print("FP revenue years:", np.sum(self.fp_nondisc_revenue["utility"] > 0))
         #self.NPVprint()
         #self.print_npv_timepaths("Fixed price",self.NPV_timepath,"NPV")
         #self.print_npv_timepaths("Fixed price",self.cost_timepath,"Costs")
@@ -381,7 +391,8 @@ class PDSystems:
 
         # Utility may get revenue share from build/design payments if configured (here percent_design_utility = 0)
         #remove?
-        self.cp_nondisc_utility_revenue = self.design_payments["utility"] + self.build_payments["utility"]
+        """TODO"""
+        #self.cp_nondisc_operating_revenue = self.design_payments["utility"] + self.build_payments["utility"]
         #print(self.cp_nondisc_utility_revenue)
         
         #set the costplus markup
@@ -394,8 +405,9 @@ class PDSystems:
         if self.build_payout_year is not None:
             self.revenue_start_actual = self.build_payout_year + self.commission_time
             if self.revenue_start_actual < len(self.actual_year):
-                self.cp_nondisc_utility_revenue[self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
-                self.cp_disc_utility_revenue = self.cp_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.actual_year)
+                """TODO"""
+                self.cp_nondisc_operating_revenue[self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
+                self.cp_disc_operating_revenue = self.cp_nondisc_operating_revenue / ((1 + self.discount_rate) ** self.actual_year)
                 #print(self.cp_disc_utility_revenue)
                 #cp_disc_utility_revenue *= markup #BL: should the markup be applied here?
             else:
@@ -419,8 +431,9 @@ class PDSystems:
             self.cp_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.cp_disc_revenue[actor] = np.array(self.cp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.cp_disc_revenue[actor] *= self.markup
+            #print(actor, np.sum(self.cp_disc_revenue[actor]))
         
-        print("Utility costs before paying actors:", np.sum(self.cp_disc_costs["utility"]))
+        #print("Utility costs before paying actors:", np.sum(self.cp_disc_costs["utility"]))
 
         for actor in self.actors: #need to break this line out, once the arrays have been formed
             if actor == "utility":
@@ -428,14 +441,15 @@ class PDSystems:
 
             self.cp_disc_costs["utility"] += self.cp_disc_revenue[actor] #BL: utility has to pay the actor
         
-        print("Utility costs after paying actors:", np.sum(self.cp_disc_costs["utility"]))
+        #print("Utility costs after paying actors:", np.sum(self.cp_disc_costs["utility"]))
 
         for actor in self.actors:
             self.net_disc[actor] = -self.cp_disc_costs[actor] + self.cp_disc_revenue[actor]
             
             #BL: corrected the below line to ensure that the utility is the actor to which this is applied
             if actor == "utility":
-                self.net_disc[actor] += self.cp_disc_utility_revenue
+                """TODO"""
+                self.net_disc[actor] += self.cp_disc_operating_revenue
             
             #npv cumulative sums (NPV at each year)
             self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
@@ -447,9 +461,15 @@ class PDSystems:
             # total NPV (end of timeline)
             self.NPV[actor] = float(self.NPV_timepath[actor][-1])
 
-        print("Utility discounted costs:", np.sum(self.cp_disc_costs["utility"]))
-        print("Utility discounted construction revenue:", np.sum(self.cp_disc_revenue["utility"]))
-        print("Utility discounted operating revenue:", np.sum(self.cp_disc_utility_revenue))
+        #print("Utility O&M cost in Cost+:",np.sum(self.cp_disc_costs["utility"][self.mask_om]))
+        #print("Utility discounted costs:", np.sum(self.cp_disc_costs["utility"]))
+        #print("Utility discounted construction revenue:", np.sum(self.cp_disc_revenue["utility"]))
+        """TODO"""
+        #print("Utility discounted operating revenue:", np.sum(self.cp_disc_operating_revenue))
+        print("CP build payout:", self.build_payout_year)
+        print("CP revenue start:", self.revenue_start_actual)
+        print("CP timeline length:", len(self.actual_year))
+        print("CP revenue years:", np.sum(self.cp_nondisc_operating_revenue > 0))
         print("Cost+ Utility NPV:", self.NPV["utility"])
         print("Cost+ total project NPV:", self.NPV)
 
