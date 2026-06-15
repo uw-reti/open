@@ -299,9 +299,9 @@ class PDSystems:
             self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
             
             # i think logic here makes sense -> not double counting bc removing what utility has to pay to others AND making sure utility doesn't subtract it's payout from itself
-            #if actor != "utility":
-            self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.fp_design_payout_amount[actor]
-            self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
+            if actor != "utility":
+                self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.fp_design_payout_amount[actor]
+                self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
             
             #utility rev: only begins after build completion + commissioning
             if self.build_payout_year is not None:
