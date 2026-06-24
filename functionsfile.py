@@ -467,8 +467,7 @@ class PDSystems:
 
     """IPD"""
     def ipd(self):
-        self.completion_index(self.full_progress_array)
-         
+        self.completion_index(self.full_progress_array) 
         self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
 
         #partial progress costs and revenues
@@ -516,14 +515,39 @@ class PDSystems:
             if self.revenue_start_actual < len(self.actual_year):
                 self.ipd_nondisc_utility_revenue[self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
                 self.ipd_disc_utility_revenue = self.ipd_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.actual_year)
-                
-                #self.ipd_disc_utility_revenue *= self.markup
+
             else:
                 # revenue start beyond timeline => no revenue recorded
                 pass
         else:
             # build never completed -> no operational utility revenue
             pass
+
+        #not sure if target cost or actual cost makes more sense -> target seems simpler
+        self.target_cost = self.design_cost + self.build_cost
+        self.fp_target_price = (self.target_cost) * (1 + self.contingency) * (1 + self.profit_margin)
+        self.cp_target_price = self.target_cost * (1 + self.profit_margin)
+        #could make this into an input later?
+        self.ipd_margin = 0.05 #thinking this is what will make ipd a little offset from the fp line
+        self.ipd_target_price = self.fp_target_price * (1 - self.ipd_margin)
+
+        self.crossover_cost = (self.ipd_target_price / (1 + self.profit_margin)) #does this seem right?
+
+        #could also make this an input later? 0.5 is just bc between fp = 0 and cp = 1
+        self.ipd_slope = 0.5
+
+        #maybe an actual cost instead of target here? 
+        #TODO: how to calculate this best?
+        if self.target_cost <= self.crossover_cost:
+            self.ipd_price = self.ipd_target_price
+        else:
+            self.ipd_price = self.ipd_target_price + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))
+
+        self.ipd_scaler = self.ipd_target_price / self.cp_target_price
+
+        for actor in self.actors:
+            self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
+            self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
 
         for actor in self.actors:
             self.om_costs = np.zeros_like(self.actual_year, dtype=float)
