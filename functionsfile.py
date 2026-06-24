@@ -544,24 +544,27 @@ class PDSystems:
             self.ipd_price = self.ipd_target_price + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))
 
         self.ipd_scaler = self.ipd_target_price / self.cp_target_price
-
+        
+        #i think this should be if actual cost > crossover point
         for actor in self.actors:
             self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
+            self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
+            self.ipd_disc_revenue[actor] *= self.markup
 
         for actor in self.actors:
             self.om_costs = np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[self.mask_om] = (self.OM_per_year * self.percent_OM_to[actor])
             
             self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs)
-            self.ipd_nondisc_revenue[actor] = (self.design_payments[actor] + self.build_payments[actor])
+            #self.ipd_nondisc_revenue[actor] = (self.design_payments[actor] + self.build_payments[actor])
             
             self.ipd_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
 
-            self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
-            self.ipd_disc_revenue[actor] = np.array(self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
-            self.ipd_disc_revenue[actor] *= self.markup
+            #self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+            #self.ipd_disc_revenue[actor] = np.array(self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            #self.ipd_disc_revenue[actor] *= self.markup
 
         for actor in self.actors: #need to break this line out, once the arrays have been formed
             if actor == "utility":
