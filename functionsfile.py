@@ -212,6 +212,7 @@ class PDSystems:
         print("  Utility NPV:    ", self.NPV["utility"])
         print("  AE NPV:         ", self.NPV["AE"])
         print("  Constructor NPV:", self.NPV["constructor"])
+        print("  Project NPV:",self.NPV["vendor"]+self.NPV["utility"]+self.NPV["AE"]+self.NPV["constructor"])
         
 
     def print_npv_timepaths(self, model_name, timepath,output):
