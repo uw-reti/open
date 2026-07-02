@@ -15,8 +15,8 @@ class PDSystems:
         self.inputs = inputs
         
         # unpack inputs
-        self.design_time = inputs["design_time"]
-        self.build_time = inputs["build_time"]
+        #self.design_time = inputs["design_time"]
+        #self.build_time = inputs["build_time"]
         self.operating_time = inputs["operating_time"]
         self.commission_time = inputs["commission_time"]
 
@@ -41,8 +41,10 @@ class PDSystems:
 
         self.actors = ["vendor", "AE", "constructor", "utility"]
 
+        self.target_design_time = len(self.target_design_progress)
+        self.target_build_time = len(self.target_build_progress)
 
-        self.target_year = np.arange(0, self.design_time + self.build_time + self.commission_time + self.operating_time)
+        self.target_year = np.arange(0, self.target_design_time + self.target_build_time + self.commission_time + self.operating_time)
         self.actual_design_time = len(self.actual_design_progress)
         self.actual_build_time = len(self.actual_build_progress)
         self.actual_year = np.arange(0, self.actual_design_time + self.actual_build_time + self.commission_time + self.operating_time)
@@ -274,7 +276,6 @@ class PDSystems:
             self.design_payout_year = self.build_payout_year
             self.design_target_payout_year = self.build_target_payout_year 
             
-        #self.actual_design_time = completion_payout_year(self.actual_design_progress)
         self.actual_build_time = self.build_payout_year - self.actual_design_time
 
         for actor in self.actors:
@@ -546,13 +547,18 @@ class PDSystems:
             self.ipd_price = self.ipd_target_price + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))
 
         self.ipd_scaler = self.ipd_target_price / self.cp_target_price
-        
-        #i think this should be if actual cost > crossover point
-        for actor in self.actors:
-            self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
-            self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
-            self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
-            self.ipd_disc_revenue[actor] *= self.markup
+
+        #i think this should be if actual cost > crossover point        
+        """if self.actual_cost >= self.crossover_cost:
+            for actor in self.actors:
+                self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
+                self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+                self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
+                self.ipd_disc_revenue[actor] *= self.markup
+        else:
+            #TBD"""
+
+
 
         for actor in self.actors:
             self.om_costs = np.zeros_like(self.actual_year, dtype=float)
