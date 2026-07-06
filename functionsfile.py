@@ -278,24 +278,37 @@ class PDSystems:
             
         self.actual_build_time = self.build_payout_year - self.actual_design_time
 
+        self.design_costs = self.distribute_progress_costs(
+        self.actual_design_progress,
+        phase_cost=self.design_cost,
+        phase_start=0,
+        phase_length=self.actual_design_time,
+        shares=self.percent_design,
+        )
+
+        self.build_costs = self.distribute_progress_costs(
+        self.actual_build_progress,
+        phase_cost=self.build_cost,
+        phase_start=self.actual_design_time,
+        phase_length=self.actual_build_time,
+        shares=self.percent_build,
+        )
+        
         for actor in self.actors:
             #fixed price (fp) non-discounted revenues — MILESTONE ONLY 
             self.nondisc_costs[actor]= np.zeros_like(self.actual_year, dtype=float)
             self.fp_nondisc_revenue[actor]= np.zeros_like(self.actual_year, dtype=float)
+            self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
 
         for actor in self.actors:
             #non-discounted costs
-            # DESIGN period
-            self.nondisc_costs[actor][self.mask_design] = (self.design_cost / self.actual_design_time) * self.percent_design[actor]
-            # BUILD period
-            self.nondisc_costs[actor][self.mask_build] = (self.build_cost / self.actual_build_time) * self.percent_build[actor]
-            # O&M period starts when revenue starts
-            self.nondisc_costs[actor][self.mask_om] = self.OM_per_year * self.percent_OM_to[actor]
+            self.om_costs[actor][self.mask_om] = (self.OM_per_year * self.percent_OM_to[actor])           
+            self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs[actor])
             #discounted costs
             self.disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
             #payouts per actor per phase
-            self.fp_design_payout_amount[actor] = (np.sum(self.disc_costs[actor][self.mask_design])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.design_payout_year
-            self.fp_build_payout_amount[actor] = (np.sum(self.disc_costs[actor][self.mask_build])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.build_payout_year
+            self.fp_design_payout_amount[actor] = (np.sum(self.disc_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.design_payout_year
+            self.fp_build_payout_amount[actor] = (np.sum(self.disc_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.build_payout_year
             
             self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
             self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
