@@ -89,6 +89,8 @@ class PDSystems:
         self.cp_nondisc_operating_revenue = {}
         self.cp_disc_operating_revenue = {}
 
+        self.nondisc_actual_costs = {}
+        self.actual_costs = {}
         self.ipd_disc_costs = {}
         self.ipd_nondisc_revenue = {}
         self.ipd_disc_revenue = {}
@@ -561,17 +563,27 @@ class PDSystems:
 
         self.ipd_scaler = self.ipd_target_price / self.cp_target_price
 
-        #i think this should be if actual cost > crossover point        
-        """if self.actual_cost >= self.crossover_cost:
+        #i think this should be if actual cost > crossover point
+        for actor in self.actors:
+            #self.nondisc_actual_costs = np.zeros_like(self.actual_year, dtype=float)
+            #self.actual_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.nondisc_actual_costs[actor] = (self.design_costs[actor] + self.build_costs[actor])
+            self.actual_costs[actor] = np.array(self.nondisc_actual_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            self.actual_cost = np.sum(self.actual_costs[actor])
+       
+        if self.actual_cost >= self.crossover_cost:
             for actor in self.actors:
                 self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
                 self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
                 self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
                 self.ipd_disc_revenue[actor] *= self.markup
         else:
-            #TBD"""
-
-
+            for actor in self.actors:
+                self.ipd_nondisc_revenue[actor] = self.fp_nondisc_revenue[actor] * (1 - self.ipd_margin)
+                self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+                self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
+                self.ipd_disc_revenue[actor] *= self.markup
+            
 
         for actor in self.actors:
             self.om_costs = np.zeros_like(self.actual_year, dtype=float)
