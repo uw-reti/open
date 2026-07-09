@@ -91,6 +91,7 @@ class PDSystems:
 
         self.nondisc_actual_costs = {}
         self.actual_costs = {}
+        self.cumulative_actual_cost = {}
         self.ipd_disc_costs = {}
         self.ipd_nondisc_revenue = {}
         self.ipd_disc_revenue = {}
@@ -348,10 +349,10 @@ class PDSystems:
         #print("Build payout year (computed):", self.build_payout_year)
         #print("Fixed Price revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
         
-        self.NPVprint()
-        self.print_npv_timepaths("Fixed price",self.NPV_timepath,"NPV")
-        self.print_npv_timepaths("Fixed price",self.cost_timepath,"Costs")
-        self.print_npv_timepaths("Fixed price",self.revenue_timepath,"Revenue")
+        #self.NPVprint()
+        #self.print_npv_timepaths("Fixed price",self.NPV_timepath,"NPV")
+        #self.print_npv_timepaths("Fixed price",self.cost_timepath,"Costs")
+        #self.print_npv_timepaths("Fixed price",self.revenue_timepath,"Revenue")
 
 
 
@@ -475,10 +476,10 @@ class PDSystems:
 
         #print("Cost+ revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
 
-        self.NPVprint()
-        self.print_npv_timepaths("Cost plus",self.NPV_timepath,"NPV")
-        self.print_npv_timepaths("Cost plus",self.cost_timepath,"Costs")
-        self.print_npv_timepaths("Cost plus",self.revenue_timepath,"Revenue")
+        #self.NPVprint()
+        #self.print_npv_timepaths("Cost plus",self.NPV_timepath,"NPV")
+        #self.print_npv_timepaths("Cost plus",self.cost_timepath,"Costs")
+        #self.print_npv_timepaths("Cost plus",self.revenue_timepath,"Revenue")
 
 
 
@@ -564,25 +565,37 @@ class PDSystems:
         self.ipd_scaler = self.ipd_target_price / self.cp_target_price
 
         #i think this should be if actual cost > crossover point
+        self.actual_cost = np.zeros_like(self.actual_year, dtype=float)
+        
         for actor in self.actors:
-            #self.nondisc_actual_costs = np.zeros_like(self.actual_year, dtype=float)
-            #self.actual_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.nondisc_actual_costs[actor] = (self.design_costs[actor] + self.build_costs[actor])
             self.actual_costs[actor] = np.array(self.nondisc_actual_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
-            self.actual_cost = np.sum(self.actual_costs[actor])
+            self.actual_cost += self.actual_costs[actor]
+            #print("actual costs", self.actual_costs)
+            #print("actual cost", self.actual_cost)
+        
+        self.cumulative_actual_cost = np.cumsum(self.actual_cost)
+        print("cumulative costs", self.cumulative_actual_cost)
        
-        if self.actual_cost >= self.crossover_cost:
+        crossedover = False
+
+        for year in range(len(self.actual_year)):
+
+            if self.cumulative_actual_cost[year] >= self.crossover_cost:
+                crossedover = True
+
             for actor in self.actors:
-                self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
-                self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
-                self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
-                self.ipd_disc_revenue[actor] *= self.markup
-        else:
-            for actor in self.actors:
-                self.ipd_nondisc_revenue[actor] = self.fp_nondisc_revenue[actor] * (1 - self.ipd_margin)
-                self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
-                self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
-                self.ipd_disc_revenue[actor] *= self.markup
+                    
+                if crossedover:
+                    self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
+                    self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+                    self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
+                    self.ipd_disc_revenue[actor] *= self.markup
+                else:
+                    self.ipd_nondisc_revenue[actor] = self.fp_nondisc_revenue[actor] * (1 - self.ipd_margin)
+                    self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+                    self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
+                    self.ipd_disc_revenue[actor] *= self.markup
             
 
         for actor in self.actors:
