@@ -107,33 +107,6 @@ class PDSystems:
         idx = np.where(full_progress_array >= 100)[0]
         return int(idx[0]) if idx.size > 0 else None
 
-    """think I'm gonna get rid of this too"""
-    #fxn that maps a sample index i (0-based) from a progress array of length n_years into a year within the phase: an integer in [phase_start, phase_start + phase_length - 1]
-    def map_sample_to_phase_year(self,i, n_year, phase_start, phase_length):
-        if n_year <= 0:
-            raise ValueError("years must be > 0")
-        frac = (i + 1) / n_year
-        year_within = int(np.ceil(frac * phase_length)) - 1
-        year_within = max(0, min(phase_length - 1, year_within))
-        return int(phase_start + year_within)
-
-    """think I'm gonna get rid of this bc it wasn't mapping properly"""
-    #fxn that maps a cumulative progress (0..100%) to an absolute model year within the phase: an integer in [phase_start, phase_start + phase_length - 1]
-    def map_cumulative_progress_to_phase_year(self, cum_pct, phase_start, phase_length):
-        """Uses the same spacing rule as map_sample_to_phase_year but with completion
-        fraction p = cum_pct/100 instead of p = (i+1)/n_years. Cash tied to *earned*
-        progress moves to later phase years when the actual curve is back-loaded,
-        so discounted NPV reflects delay (closer in spirit to fixed-price milestone timing).
-
-        Costs may still use map_sample_to_phase_year if you keep distribute_progress_costs unchanged."""
-        if phase_length <= 0:
-            raise ValueError("phase_length must be > 0")
-        p = float(np.clip(np.asarray(cum_pct, dtype=float), 0.0, 100.0)) / 100.0
-        pl = int(phase_length)
-        year_within = int(np.ceil(p * pl)) - 1
-        year_within = max(0, min(pl - 1, year_within))
-        return int(phase_start + year_within)
-
     #fxn that returns the absolute year when build progress reaches 100% (map sample index to a year). If build never reaches 100%, returns None
     def build_completion_payout_year(self, actual_build_progress, actual_design_time, actual_build_time):
         idx = self.completion_index(actual_build_progress)
