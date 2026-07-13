@@ -77,6 +77,9 @@ class PDSystems:
         self.nondisc_costs = {}
         self.disc_costs = {}
         self.net_disc = {}
+        self.disc_design_costs = {}
+        self.disc_build_costs = {}
+        self.disc_om_costs = {}
 
         self.fp_nondisc_revenue = {}
         self.fp_disc_revenue = {}
@@ -272,7 +275,10 @@ class PDSystems:
         
         for actor in self.actors:
             #fixed price (fp) non-discounted revenues — MILESTONE ONLY 
-            self.nondisc_costs[actor]= np.zeros_like(self.actual_year, dtype=float)
+            self.disc_design_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.disc_build_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.disc_om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.nondisc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.fp_nondisc_revenue[actor]= np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
 
@@ -282,9 +288,16 @@ class PDSystems:
             self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs[actor])
             #discounted costs
             self.disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            #print("disc costs", self.disc_costs)
+            self.disc_design_costs[actor] = (self.design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            #print("disc design costs", self.disc_design_costs)
+            self.disc_build_costs[actor] = (self.build_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            #print("disc build costs", self.disc_build_costs)
+            self.disc_om_costs[actor] = (self.om_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            print("disc om costs", self.disc_om_costs)
             #payouts per actor per phase
-            self.fp_design_payout_amount[actor] = (np.sum(self.disc_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.design_payout_year
-            self.fp_build_payout_amount[actor] = (np.sum(self.disc_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.build_payout_year
+            self.fp_design_payout_amount[actor] = (np.sum(self.disc_design_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.design_payout_year
+            self.fp_build_payout_amount[actor] = (np.sum(self.disc_build_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin)*(1 + self.discount_rate)**self.build_payout_year
             
             self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
             self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
@@ -526,14 +539,14 @@ class PDSystems:
         self.crossover_cost = (self.ipd_target_price / (1 + self.profit_margin)) #does this seem right?
 
         #could also make this an input later? 0.5 is just bc between fp = 0 and cp = 1
-        self.ipd_slope = 0.5
+        """self.ipd_slope = 0.5
 
         #maybe an actual cost instead of target here? 
         #TODO: how to calculate this best?
         if self.target_cost <= self.crossover_cost:
             self.ipd_price = self.ipd_target_price
         else:
-            self.ipd_price = self.ipd_target_price + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))
+            self.ipd_price = self.ipd_target_price + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))"""
 
         self.ipd_scaler = self.ipd_target_price / self.cp_target_price
 
@@ -548,7 +561,7 @@ class PDSystems:
             #print("actual cost", self.actual_cost)
         
         self.cumulative_actual_cost = np.cumsum(self.actual_cost)
-        print("cumulative costs", self.cumulative_actual_cost)
+        #print("cumulative costs", self.cumulative_actual_cost)
        
         crossedover = False
 
@@ -558,17 +571,20 @@ class PDSystems:
                 crossedover = True
 
             for actor in self.actors:
-                    
+                if actor == "utility":
+                    self.ipd_disc_revenue["utility"] = np.zeros_like(self.actual_year, dtype=float)
+                    continue
+                
                 if crossedover:
-                    self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * self.ipd_scaler
+                    self.ipd_nondisc_revenue[actor] = self.cp_nondisc_revenue[actor] * (1 - self.ipd_scaler) #possibly this? bc rn it sits above cost+ curve
                     self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
                     self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
-                    self.ipd_disc_revenue[actor] *= self.markup
                 else:
+                    #need to change to get paid yearly instead of lump sum
                     self.ipd_nondisc_revenue[actor] = self.fp_nondisc_revenue[actor] * (1 - self.ipd_margin)
+                    #print(self.ipd_nondisc_revenue)
                     self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
                     self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
-                    self.ipd_disc_revenue[actor] *= self.markup
             
 
         for actor in self.actors:
