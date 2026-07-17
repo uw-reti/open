@@ -19,17 +19,17 @@ from pathlib import Path
 import pandas as pd
 
 actors = ("vendor", "AE", "constructor", "utility")
-pds = ("fixed_price", "cost_plus", "ipd")
+pds = ("fixed_price", "cost_plus","ipd")
 
 
 def row_to_inputs(row):
-    if len(row) < 30:
-        raise ValueError("Each row needs 30 columns")
+    if len(row) < 32:
+        raise ValueError("Each row needs 32 columns")
 
-    actual_design = [float(x) for x in row.iloc[10].split(",")]
-    actual_build = [float(x) for x in row.iloc[11].split(",")]
-    target_design = [float(x) for x in row.iloc[12].split(",")]
-    target_build = [float(x) for x in row.iloc[13].split(",")]
+    actual_design = [float(x) for x in row.iloc[12].split(",")]
+    actual_build = [float(x) for x in row.iloc[13].split(",")]
+    target_design = [float(x) for x in row.iloc[14].split(",")]
+    target_build = [float(x) for x in row.iloc[15].split(",")]
 
     f = float
     i = lambda j: int(float(row.iloc[j]))
@@ -38,40 +38,42 @@ def row_to_inputs(row):
         "name": str(row.iloc[0]).strip(),
         "operating_time": i(1),
         "commission_time": i(2),
-        "design_cost": f(row.iloc[3]),
-        "build_cost": f(row.iloc[4]),
-        "om_per_year": f(row.iloc[5]),
-        "revenue_per_year": f(row.iloc[6]),
-        "discount_rate": f(row.iloc[7]),
-        "contingency": f(row.iloc[8]),
-        "profit_margin": f(row.iloc[9]),
+        "target_design_cost": f(row.iloc[3]),
+        "target_build_cost": f(row.iloc[4]),
+        "design_cost": f(row.iloc[5]),
+        "build_cost": f(row.iloc[6]),
+        "om_per_year": f(row.iloc[7]),
+        "revenue_per_year": f(row.iloc[8]),
+        "discount_rate": f(row.iloc[9]),
+        "contingency": f(row.iloc[10]),
+        "profit_margin": f(row.iloc[11]),
         "actual_design_progress": actual_design,
         "actual_build_progress": actual_build,
         "target_design_progress": target_design,
         "target_build_progress": target_build,
         "percent_design": {
-            "vendor": f(row.iloc[14]),
-            "AE": f(row.iloc[15]),
-            "constructor": f(row.iloc[16]),
-            "utility": f(row.iloc[17]),
+            "vendor": f(row.iloc[16]),
+            "AE": f(row.iloc[17]),
+            "constructor": f(row.iloc[18]),
+            "utility": f(row.iloc[19]),
         },
         "percent_build": {
-            "vendor": f(row.iloc[18]),
-            "AE": f(row.iloc[19]),
-            "constructor": f(row.iloc[20]),
-            "utility": f(row.iloc[21]),
+            "vendor": f(row.iloc[20]),
+            "AE": f(row.iloc[21]),
+            "constructor": f(row.iloc[22]),
+            "utility": f(row.iloc[23]),
         },
         "percent_OM_to": {
-            "vendor": f(row.iloc[22]),
-            "AE": f(row.iloc[23]),
-            "constructor": f(row.iloc[24]),
-            "utility": f(row.iloc[25]),
+            "vendor": f(row.iloc[24]),
+            "AE": f(row.iloc[25]),
+            "constructor": f(row.iloc[26]),
+            "utility": f(row.iloc[27]),
         },
         "percent_revenue_to": {
-            "vendor": f(row.iloc[26]),
-            "AE": f(row.iloc[27]),
-            "constructor": f(row.iloc[28]),
-            "utility": f(row.iloc[29]),
+            "vendor": f(row.iloc[28]),
+            "AE": f(row.iloc[29]),
+            "constructor": f(row.iloc[30]),
+            "utility": f(row.iloc[31]),
         },
     }
 

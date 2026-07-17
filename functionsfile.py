@@ -22,6 +22,10 @@ class PDSystems:
 
         self.design_cost = inputs["design_cost"]
         self.build_cost = inputs["build_cost"]
+        
+        self.target_design_cost = inputs["target_design_cost"]
+        self.target_build_cost = inputs["target_build_cost"]
+        
         self.revenue_per_year = inputs["revenue_per_year"]
         self.OM_per_year = inputs["om_per_year"]
 
@@ -85,6 +89,8 @@ class PDSystems:
         self.fp_disc_revenue = {}
         self.fp_design_payout_amount={}
         self.fp_build_payout_amount={}
+        self.disc_target_design_costs={}
+        self.disc_target_build_costs={}
 
         self.cp_disc_costs = {}
         self.cp_nondisc_revenue = {}
@@ -257,7 +263,24 @@ class PDSystems:
             self.design_target_payout_year = self.build_target_payout_year 
             
         self.actual_build_time = self.build_payout_year - self.actual_design_time
-
+        
+        self.target_design_costs = self.distribute_progress_costs(
+        self.target_design_progress,
+        phase_cost=self.target_design_cost,
+        phase_start=0,
+        phase_length=self.target_design_time,
+        shares=self.percent_design,
+        )
+        
+        self.target_build_costs = self.distribute_progress_costs(
+        self.target_build_progress,
+        phase_cost=self.target_build_cost,
+        phase_start=self.target_design_time,
+        phase_length=self.target_build_time,
+        shares=self.percent_build,
+        )
+        
+        
         self.design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
@@ -278,6 +301,8 @@ class PDSystems:
             #fixed price (fp) non-discounted revenues — MILESTONE ONLY 
             self.disc_design_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.disc_build_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.disc_target_design_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.disc_target_build_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.disc_om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.nondisc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.fp_nondisc_revenue[actor]= np.zeros_like(self.actual_year, dtype=float)
@@ -291,12 +316,16 @@ class PDSystems:
             #discounted costs
             self.disc_design_costs[actor] = (self.design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
             self.disc_build_costs[actor] = (self.build_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            
+            self.disc_target_design_costs[actor] = (self.target_design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            self.disc_target_build_costs[actor]  = (self.target_build_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            
             self.disc_om_costs[actor] = (self.om_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
             self.disc_costs[actor] = (self.disc_design_costs[actor] + self.disc_build_costs[actor] + self.disc_om_costs[actor])
             
             #payouts per actor per phase
-            self.fp_design_payout_amount[actor] = (np.sum(self.disc_design_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.design_payout_year
-            self.fp_build_payout_amount[actor] = (np.sum(self.disc_build_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.build_payout_year
+            self.fp_design_payout_amount[actor] = (np.sum(self.disc_target_design_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.design_payout_year
+            self.fp_build_payout_amount[actor] = (np.sum(self.disc_target_build_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.build_payout_year
             
             self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
             self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
