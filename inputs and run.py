@@ -26,10 +26,10 @@ def row_to_inputs(row):
     if len(row) < 32:
         raise ValueError("Each row needs 32 columns")
 
-    actual_design = [float(x) for x in row.iloc[12].split(",")]
-    actual_build = [float(x) for x in row.iloc[13].split(",")]
-    target_design = [float(x) for x in row.iloc[14].split(",")]
-    target_build = [float(x) for x in row.iloc[15].split(",")]
+    actual_design = [float(x) for x in row.iloc[14].split(",")]
+    actual_build = [float(x) for x in row.iloc[15].split(",")]
+    target_design = [float(x) for x in row.iloc[16].split(",")]
+    target_build = [float(x) for x in row.iloc[17].split(",")]
 
     f = float
     i = lambda j: int(float(row.iloc[j]))
@@ -40,40 +40,48 @@ def row_to_inputs(row):
         "commission_time": i(2),
         "target_design_cost": f(row.iloc[3]),
         "target_build_cost": f(row.iloc[4]),
-        "design_cost": f(row.iloc[5]),
-        "build_cost": f(row.iloc[6]),
-        "om_per_year": f(row.iloc[7]),
-        "revenue_per_year": f(row.iloc[8]),
-        "discount_rate": f(row.iloc[9]),
-        "contingency": f(row.iloc[10]),
-        "profit_margin": f(row.iloc[11]),
+        "target_ipd_cost": f(row.iloc[5]),
+        "design_cost": f(row.iloc[6]),
+        "build_cost": f(row.iloc[7]),
+        "om_per_year": f(row.iloc[8]),
+        "revenue_per_year": f(row.iloc[9]),
+        "discount_rate": f(row.iloc[10]),
+        "contingency": f(row.iloc[11]),
+        "ipd_contingency": f(row.iloc[12]),
+        "profit_margin": f(row.iloc[13]),
         "actual_design_progress": actual_design,
         "actual_build_progress": actual_build,
         "target_design_progress": target_design,
         "target_build_progress": target_build,
         "percent_design": {
-            "vendor": f(row.iloc[16]),
-            "AE": f(row.iloc[17]),
-            "constructor": f(row.iloc[18]),
-            "utility": f(row.iloc[19]),
+            "vendor": f(row.iloc[18]),
+            "AE": f(row.iloc[19]),
+            "constructor": f(row.iloc[20]),
+            "utility": f(row.iloc[21]),
         },
         "percent_build": {
-            "vendor": f(row.iloc[20]),
-            "AE": f(row.iloc[21]),
-            "constructor": f(row.iloc[22]),
-            "utility": f(row.iloc[23]),
+            "vendor": f(row.iloc[22]),
+            "AE": f(row.iloc[23]),
+            "constructor": f(row.iloc[24]),
+            "utility": f(row.iloc[25]),
         },
         "percent_OM_to": {
-            "vendor": f(row.iloc[24]),
-            "AE": f(row.iloc[25]),
-            "constructor": f(row.iloc[26]),
-            "utility": f(row.iloc[27]),
+            "vendor": f(row.iloc[26]),
+            "AE": f(row.iloc[27]),
+            "constructor": f(row.iloc[28]),
+            "utility": f(row.iloc[29]),
         },
         "percent_revenue_to": {
-            "vendor": f(row.iloc[28]),
-            "AE": f(row.iloc[29]),
-            "constructor": f(row.iloc[30]),
-            "utility": f(row.iloc[31]),
+            "vendor": f(row.iloc[30]),
+            "AE": f(row.iloc[31]),
+            "constructor": f(row.iloc[32]),
+            "utility": f(row.iloc[33]),
+        },
+        "percent_pool_to": {
+            "vendor": f(row.iloc[34]),
+            "AE": f(row.iloc[35]),
+            "constructor": f(row.iloc[36]),
+            "utility": f(row.iloc[37]),
         },
     }
 

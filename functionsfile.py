@@ -25,12 +25,14 @@ class PDSystems:
         
         self.target_design_cost = inputs["target_design_cost"]
         self.target_build_cost = inputs["target_build_cost"]
+        self.target_ipd_cost = inputs["target_ipd_cost"]
         
         self.revenue_per_year = inputs["revenue_per_year"]
         self.OM_per_year = inputs["om_per_year"]
 
         self.discount_rate = inputs["discount_rate"]
         self.contingency = inputs["contingency"]
+        self.ipd_contingency = inputs["ipd_contingency"]
         self.profit_margin = inputs["profit_margin"]
 
         self.actual_design_progress = np.array(inputs["actual_design_progress"])
@@ -42,6 +44,7 @@ class PDSystems:
         self.percent_build = inputs["percent_build"]
         self.percent_OM_to = inputs["percent_OM_to"]
         self.percent_revenue_to = inputs["percent_revenue_to"]
+        self.percent_pool_to = inputs["percent_pool_to"]
 
         self.actors = ["vendor", "AE", "constructor", "utility"]
 
@@ -149,15 +152,12 @@ class PDSystems:
             #self.pay_year = self.map_sample_to_phase_year(self, i, n_year, phase_start, phase_length)
             #changed this bc it was only calculating build costs at years 4 and 5 (mapping mightve been the problem)
             self.pay_year = phase_start + i
-            # guard: if pay_year outside timeline, cap to last year
-            #if pay_year < 0:
-            #    pay_year = 0
             if self.pay_year >= len(self.actual_year):
                 continue
 
             for actor, share in shares.items():
                 self.costs[actor][self.pay_year] += self.delta_cum_progress_frac[i] * phase_cost * share
-                #print("CP non disc costs:", actor, pay_year, delta_cum_progress_frac[i] * phase_cost * share)
+
         return self.costs
 
 
@@ -180,18 +180,12 @@ class PDSystems:
             """TODO: may need to change this to self.pay_year = phase_start + i too (look above)"""
             #self.pay_year = self.map_cumulative_progress_to_phase_year(full_progress_array[i], phase_start, phase_length)
             self.pay_year = phase_start + i
-            # guard: if pay_year outside timeline, cap to last year
-            #if pay_year < 0:
-            #    pay_year = 0
+
             if self.pay_year >= len(self.actual_year):
                 continue
 
             for actor, share in shares.items():
                 self.payments[actor][self.pay_year] += self.delta_cum_progress_frac[i] * phase_cost * share
-                #print("CP non disc payments:", actor, pay_year, delta_cum_progress_frac[i] * phase_cost * share)
-
-            #print("progress =", full_progress_array[i])
-            #print("pay_year =", self.pay_year)
         
         return self.payments
 
@@ -549,11 +543,8 @@ class PDSystems:
         self.target_cost = self.design_cost + self.build_cost
         self.fp_target_price = (self.target_cost) * (1 + self.contingency) * (1 + self.profit_margin)
         self.cp_target_price = self.target_cost * (1 + self.profit_margin)
-        #TODO: could make this into an input later?
-        self.ipd_margin = self.contingency #thinking this is what will make ipd a little offset from the fp line
-        self.ipd_target_price = self.fp_target_price * (1 - self.ipd_margin)
 
-        self.crossover_cost = (self.ipd_target_price / (1 + self.profit_margin)) #does this seem right?
+        self.crossover_cost = (self.target_ipd_cost / (1 + self.profit_margin)) #does this seem right?
 
         #TODO: could also make this an input later? 0.5 is just bc between fp = 0 and cp = 1
         self.ipd_slope = 0.5
@@ -561,9 +552,9 @@ class PDSystems:
         #maybe an actual cost instead of target here? 
         #TODO: how to calculate this best?
         if self.target_cost <= self.crossover_cost:
-            self.ipd_price = self.ipd_target_price
+            self.ipd_price = self.target_ipd_cost
         else:
-            self.ipd_price = self.ipd_target_price + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))
+            self.ipd_price = self.target_ipd_cost + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))
 
         self.ipd_scaler = self.ipd_price / self.cp_target_price
         #self.ipd_scaler2 = self.ipd_target_price / self.cp_target_price
@@ -598,18 +589,18 @@ class PDSystems:
                 ipd_payment = self.design_payments[actor][year] + self.build_payments[actor][year]
 
                 if crossedover:
-                    self.ipd_nondisc_revenue[actor][year] = (ipd_payment) * (1 - self.ipd_scaler)
+                    self.ipd_nondisc_revenue[actor][year] = ipd_payment
                 else:
-                    self.ipd_nondisc_revenue[actor][year] = (ipd_payment) * (1 - self.ipd_margin)
-
-        for year in range(len(self.actual_year)):    
-            if year > self.build_payout_year:
-                self.extra_pool = self.ipd_target_price - self.cumulative_actual_cost
-                
-                for actor in self.actors:
-                    self.bonus_rev[actor] = self.extra_pool * self.percent_pool_to[actor]        
-            else:
-                continue
+                    self.ipd_nondisc_revenue[actor][year] = (ipd_payment) * (1 + self.ipd_contingency)
+    
+        if self.cumulative_actual_cost[self.build_payout_year] < self.target_ipd_cost:
+            self.extra_pool = self.target_ipd_cost - self.cumulative_actual_cost[self.build_payout_year]
+            
+            for actor in self.actors:
+                self.bonus_rev[actor] = self.extra_pool * self.percent_pool_to[actor]        
+        else:
+            for actor in self.actors:
+                self.bonus_rev[actor] = np.zeros_like(self.actual_year, dtype=float)
 
         print("disc rev", self.ipd_nondisc_revenue)
 
@@ -624,7 +615,7 @@ class PDSystems:
             self.ipd_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
 
-        for actor in self.actors: #need to break this line out, once the arrays have been formed
+        for actor in self.actors:
             if actor == "utility":
                 continue
             
