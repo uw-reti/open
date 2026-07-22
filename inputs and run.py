@@ -23,13 +23,15 @@ pds = ("fixed_price", "cost_plus","ipd")
 
 
 def row_to_inputs(row):
-    if len(row) < 32:
-        raise ValueError("Each row needs 32 columns")
+    if len(row) < 40:
+        raise ValueError("Each row needs 40 columns")
 
     actual_design = [float(x) for x in row.iloc[14].split(",")]
     actual_build = [float(x) for x in row.iloc[15].split(",")]
-    target_design = [float(x) for x in row.iloc[16].split(",")]
-    target_build = [float(x) for x in row.iloc[17].split(",")]
+    actual_ipd = [float(x) for x in row.iloc[16].split(",")]
+    target_design = [float(x) for x in row.iloc[17].split(",")]
+    target_build = [float(x) for x in row.iloc[18].split(",")]
+    target_ipd = [float(x) for x in row.iloc[19].split(",")]
 
     f = float
     i = lambda j: int(float(row.iloc[j]))
@@ -51,37 +53,45 @@ def row_to_inputs(row):
         "profit_margin": f(row.iloc[13]),
         "actual_design_progress": actual_design,
         "actual_build_progress": actual_build,
+        "actual_ipd_progress": actual_ipd,
         "target_design_progress": target_design,
         "target_build_progress": target_build,
+        "target_ipd_progress": target_ipd,
         "percent_design": {
-            "vendor": f(row.iloc[18]),
-            "AE": f(row.iloc[19]),
-            "constructor": f(row.iloc[20]),
-            "utility": f(row.iloc[21]),
+            "vendor": f(row.iloc[20]),
+            "AE": f(row.iloc[21]),
+            "constructor": f(row.iloc[22]),
+            "utility": f(row.iloc[23]),
         },
         "percent_build": {
-            "vendor": f(row.iloc[22]),
-            "AE": f(row.iloc[23]),
-            "constructor": f(row.iloc[24]),
-            "utility": f(row.iloc[25]),
+            "vendor": f(row.iloc[24]),
+            "AE": f(row.iloc[25]),
+            "constructor": f(row.iloc[26]),
+            "utility": f(row.iloc[27]),
+        },
+        "percent_ipd": {
+            "vendor": f(row.iloc[28]),
+            "AE": f(row.iloc[29]),
+            "constructor": f(row.iloc[30]),
+            "utility": f(row.iloc[31]),
         },
         "percent_OM_to": {
-            "vendor": f(row.iloc[26]),
-            "AE": f(row.iloc[27]),
-            "constructor": f(row.iloc[28]),
-            "utility": f(row.iloc[29]),
+            "vendor": f(row.iloc[32]),
+            "AE": f(row.iloc[33]),
+            "constructor": f(row.iloc[34]),
+            "utility": f(row.iloc[35]),
         },
         "percent_revenue_to": {
-            "vendor": f(row.iloc[30]),
-            "AE": f(row.iloc[31]),
-            "constructor": f(row.iloc[32]),
-            "utility": f(row.iloc[33]),
+            "vendor": f(row.iloc[36]),
+            "AE": f(row.iloc[37]),
+            "constructor": f(row.iloc[38]),
+            "utility": f(row.iloc[39]),
         },
         "percent_pool_to": {
-            "vendor": f(row.iloc[34]),
-            "AE": f(row.iloc[35]),
-            "constructor": f(row.iloc[36]),
-            "utility": f(row.iloc[37]),
+            "vendor": f(row.iloc[40]),
+            "AE": f(row.iloc[41]),
+            "constructor": f(row.iloc[42]),
+            "utility": f(row.iloc[43]),
         },
     }
 
@@ -107,8 +117,8 @@ def main():
     output_csv = input_csv.with_name(input_csv.stem + "_results.csv")
 
     df = pd.read_csv(input_csv, dtype=str, keep_default_na=False)
-    if df.shape[1] < 30:
-        print(f"Error: run needs 30 columns, found {df.shape[1]}.")
+    if df.shape[1] < 40:
+        print(f"Error: run needs 40 columns, found {df.shape[1]}.")
         sys.exit(1)
 
     results = []

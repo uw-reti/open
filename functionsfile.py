@@ -37,11 +37,14 @@ class PDSystems:
 
         self.actual_design_progress = np.array(inputs["actual_design_progress"])
         self.actual_build_progress = np.array(inputs["actual_build_progress"])
+        self.actual_ipd_progress = np.array(inputs["actual_ipd_progress"])
         self.target_design_progress = np.array(inputs["target_design_progress"])
         self.target_build_progress = np.array(inputs["target_build_progress"])
+        self.target_ipd_progress = np.array(inputs["target_ipd_progress"])
 
         self.percent_design = inputs["percent_design"]
         self.percent_build = inputs["percent_build"]
+        self.percent_ipd = inputs["percent_ipd"]
         self.percent_OM_to = inputs["percent_OM_to"]
         self.percent_revenue_to = inputs["percent_revenue_to"]
         self.percent_pool_to = inputs["percent_pool_to"]
@@ -50,10 +53,12 @@ class PDSystems:
 
         self.target_design_time = len(self.target_design_progress)
         self.target_build_time = len(self.target_build_progress)
+        self.target_ipd_time = len(self.target_ipd_progress)
 
         self.target_year = np.arange(0, self.target_design_time + self.target_build_time + self.commission_time + self.operating_time)
         self.actual_design_time = len(self.actual_design_progress)
         self.actual_build_time = len(self.actual_build_progress)
+        self.actual_ipd_time = len(self.actual_ipd_progress)
         self.actual_year = np.arange(0, self.actual_design_time + self.actual_build_time + self.commission_time + self.operating_time)
         
         self.target_progress = np.append(self.target_design_progress, self.target_build_progress)
@@ -486,7 +491,7 @@ class PDSystems:
         self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
 
         #partial progress costs and revenues
-        self.design_costs = self.distribute_progress_costs(
+        """self.design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -516,6 +521,30 @@ class PDSystems:
         phase_start=self.actual_design_time,
         phase_length=self.actual_build_time,
         shares=self.percent_build,
+        )"""
+
+        self.target_costs = self.distribute_progress_costs(
+        self.target_ipd_progress,
+        phase_cost=self.target_ipd_cost,
+        phase_start=0,
+        phase_length=self.target_ipd_time,
+        shares=self.percent_ipd,
+        )
+
+        self.actual_costs = self.distribute_progress_costs(
+        self.actual_ipd_progress,
+        phase_cost=(self.design_cost + self.build_cost),
+        phase_start=0,
+        phase_length=self.actual_ipd_time,
+        shares=self.percent_ipd,
+        )
+
+        self.actual_payments = self.distribute_progress_payments(
+        self.actual_ipd_progress,
+        phase_cost=(self.design_cost + self.build_cost),
+        phase_start=0,
+        phase_length=self.actual_ipd_time,
+        shares=self.percent_ipd,
         )
 
         # Utility may get revenue share from build/design payments if configured (here percent_design_utility = 0)
