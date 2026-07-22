@@ -564,7 +564,7 @@ class PDSystems:
         # Utility operational revenue (annual), starts only after build is completed + commissioning
         # Determine actual build completion year mapped to timeline
         self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
-        print(self.build_payout_year)
+
         if self.build_payout_year is not None:
             self.revenue_start_actual = self.build_payout_year + self.commission_time
             if self.revenue_start_actual < len(self.actual_year):
@@ -578,9 +578,9 @@ class PDSystems:
             pass
 
         #not sure if target cost or actual cost makes more sense -> target seems simpler
-        #self.target_cost = self.design_cost + self.build_cost
+        self.target_total_cost = self.target_design_cost + self.target_build_cost
         #self.fp_target_price = (self.target_cost) * (1 + self.contingency) * (1 + self.profit_margin)
-        self.cp_target_price = self.target_cost * (1 + self.profit_margin)
+        self.cp_target_price = self.target_total_cost * (1 + self.profit_margin)
 
         self.crossover_cost = (self.target_ipd_cost / (1 + self.profit_margin)) #does this seem right?
 
@@ -589,10 +589,10 @@ class PDSystems:
 
         #maybe an actual cost instead of target here? 
         #TODO: how to calculate this best?
-        if self.target_cost <= self.crossover_cost:
+        if self.target_total_cost <= self.crossover_cost:
             self.ipd_price = self.target_ipd_cost
         else:
-            self.ipd_price = self.target_ipd_cost + (self.ipd_slope * max(0, self.target_cost - self.crossover_cost))
+            self.ipd_price = self.target_ipd_cost + (self.ipd_slope * max(0, self.target_total_cost - self.crossover_cost))
 
         self.ipd_scaler = self.ipd_price / self.cp_target_price
         #self.ipd_scaler2 = self.ipd_target_price / self.cp_target_price
