@@ -29,10 +29,11 @@ class TestPDSystems(unittest.TestCase):
         inputs["target_design_progress"]=[25,50,75,100]
         inputs["target_build_progress"]=[25,50,75,100]
 
-        inputs["percent_design"]=[0.2,0.8,0,0]
-        inputs["percent_build"]=[0.1,0.4,0.5,0]
-        inputs["percent_OM_to"]=[0,0,0,1]
-        inputs["percent_revenue_to"]=[0,0,0,1]
+        inputs["percent_design"] = {"vendor": 0.2, "AE": 0.8, "constructor": 0, "utility": 0}
+        inputs["percent_build"]  = {"vendor": 0.1, "AE": 0.4, "constructor": 0.5, "utility": 0}
+        inputs["percent_OM_to"]={"vendor": 0, "AE":0, "constructor":0, "utility":1}
+        inputs["percent_revenue_to"]={"vendor": 0, "AE":0, "constructor":0, "utility":1}
+        inputs["actors"] = ["vendor", "AE", "constructor", "utility"]
         self.pd = PDSystems(inputs)
 
     def tearDown(self):
@@ -115,10 +116,52 @@ class TestPDSystems(unittest.TestCase):
       #TODO: tests that behavior is as expected
     #def test_project_NPVs_are_same(self):
         #TODO: finish this
+        self.setUp()
         #run all 3 PDSystems models: fixed price, IPD and cost+
         #extract the NPVs for each actor
         #sum them
         #check they are all the same
+
+    """Fixed-price tests"""
+
+    def test_NPV_for_fixed_price(self):
+        self.pd.fixed_price()
+        expected_NPV = {
+        "vendor": 65.1669,
+        "AE": 260.6675,
+        "constructor": 138.0368,
+        "utility": -2434.5735,
+         }
+
+        for actor, expected in expected_NPV.items():
+            self.assertAlmostEqual(self.pd.NPV[actor], expected, places=3)
+    
+    """Cost plus tests"""
+    
+    def test_NPV_for_cost_plus(self):
+        self.pd.cost_plus()
+        expected_NPV = {
+        "vendor": 31.0319,
+        "AE": 124.1274,
+        "constructor": 65.7318,
+        "utility": -2191.5933,
+         }
+
+        for actor, expected in expected_NPV.items():
+            self.assertAlmostEqual(self.pd.NPV[actor], expected, places=3)
+    
+    """Comparing total NPVs across"""
+    def test_sum_of_NPVs_for_each_contract(self):
+        self.pd.fixed_price()
+        fp_total = sum(self.pd.NPV.values())
+
+        self.setUp()
+        self.pd.cost_plus()
+        cp_total = sum(self.pd.NPV.values())
+
+        self.assertAlmostEqual(fp_total,cp_total,places = 3)
+        
+
 
 if __name__ == "__main__":
     unittest.main()
