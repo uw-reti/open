@@ -159,7 +159,7 @@ class TestPDSystems(unittest.TestCase):
         self.pd.cost_plus()
         cp_total = sum(self.pd.NPV.values())
 
-        self.assertAlmostEqual(fp_total,cp_total,places = 5)
+        self.assertAlmostEqual(fp_total,cp_total,places = 6)
         
 
 
