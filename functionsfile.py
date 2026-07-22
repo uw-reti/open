@@ -108,6 +108,7 @@ class PDSystems:
 
         self.nondisc_actual_costs = {}
         self.actual_costs = {}
+        self.target_costs = {}
         self.cumulative_actual_cost = {}
         self.ipd_disc_costs = {}
         self.ipd_payment = {}
@@ -523,7 +524,7 @@ class PDSystems:
         shares=self.percent_build,
         )"""
 
-        self.target_costs = self.distribute_progress_costs(
+        self.nondisc_target_costs = self.distribute_progress_costs(
         self.target_ipd_progress,
         phase_cost=self.target_ipd_cost,
         phase_start=0,
@@ -531,7 +532,7 @@ class PDSystems:
         shares=self.percent_ipd,
         )
 
-        self.actual_costs = self.distribute_progress_costs(
+        self.nondisc_actual_costs = self.distribute_progress_costs(
         self.actual_ipd_progress,
         phase_cost=(self.design_cost + self.build_cost),
         phase_start=0,
@@ -539,6 +540,14 @@ class PDSystems:
         shares=self.percent_ipd,
         )
 
+        self.target_payments = self.distribute_progress_payments(
+        self.target_ipd_progress,
+        phase_cost=self.target_ipd_cost,
+        phase_start=0,
+        phase_length=self.target_ipd_time,
+        shares=self.percent_ipd,
+        )
+        
         self.actual_payments = self.distribute_progress_payments(
         self.actual_ipd_progress,
         phase_cost=(self.design_cost + self.build_cost),
@@ -569,8 +578,8 @@ class PDSystems:
             pass
 
         #not sure if target cost or actual cost makes more sense -> target seems simpler
-        self.target_cost = self.design_cost + self.build_cost
-        self.fp_target_price = (self.target_cost) * (1 + self.contingency) * (1 + self.profit_margin)
+        #self.target_cost = self.design_cost + self.build_cost
+        #self.fp_target_price = (self.target_cost) * (1 + self.contingency) * (1 + self.profit_margin)
         self.cp_target_price = self.target_cost * (1 + self.profit_margin)
 
         self.crossover_cost = (self.target_ipd_cost / (1 + self.profit_margin)) #does this seem right?
@@ -590,11 +599,13 @@ class PDSystems:
         #print(self.ipd_scaler2)
 
         self.actual_cost = np.zeros_like(self.actual_year, dtype=float)
+        self.target_cost = np.zeros_like(self.actual_year, dtype=float)
         
         for actor in self.actors:
-            self.nondisc_actual_costs[actor] = (self.design_costs[actor] + self.build_costs[actor])
             self.actual_costs[actor] = np.array(self.nondisc_actual_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.actual_cost += self.actual_costs[actor]
+            self.target_costs[actor] = np.array(self.nondisc_target_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            self.target_cost += self.actual_costs[actor]            
 
             self.ipd_nondisc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
@@ -615,12 +626,15 @@ class PDSystems:
                     self.ipd_disc_revenue["utility"] = np.zeros_like(self.actual_year, dtype=float)
                     continue
                 
-                ipd_payment = self.design_payments[actor][year] + self.build_payments[actor][year]
+                #ipd_payment_target = self.target_payments[actor][year]
+                ipd_payment_actual = self.actual_payments[actor][year]
 
                 if crossedover:
-                    self.ipd_nondisc_revenue[actor][year] = ipd_payment
+                    self.ipd_nondisc_revenue[actor][year] = ipd_payment_actual
                 else:
-                    self.ipd_nondisc_revenue[actor][year] = (ipd_payment) * (1 + self.ipd_contingency)
+                    #TODO: look more into this -> I think we'd use the actual bc that's what the project costs were, and target would come in below (for the extra pool)
+                    #self.ipd_nondisc_revenue[actor][year] = (ipd_payment_target) * (1 + self.ipd_contingency)
+                    self.ipd_nondisc_revenue[actor][year] = (ipd_payment_actual) * (1 + self.ipd_contingency) #might be self.profit_margin not self.ipd_contingency
     
         if self.cumulative_actual_cost[self.build_payout_year] < self.target_ipd_cost:
             self.extra_pool = self.target_ipd_cost - self.cumulative_actual_cost[self.build_payout_year]
@@ -631,7 +645,7 @@ class PDSystems:
             for actor in self.actors:
                 self.bonus_rev[actor] = np.zeros_like(self.actual_year, dtype=float)
 
-        print("disc rev", self.ipd_nondisc_revenue)
+        #print("nondisc rev", self.ipd_nondisc_revenue)
 
         for actor in self.actors:
             self.ipd_disc_revenue[actor] = self.ipd_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
@@ -639,7 +653,7 @@ class PDSystems:
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[actor][self.mask_om] = (self.OM_per_year * self.percent_OM_to[actor])
             
-            self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs[actor])
+            self.nondisc_costs[actor] = (self.nondisc_actual_costs[actor] + self.om_costs[actor])
             
             self.ipd_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
