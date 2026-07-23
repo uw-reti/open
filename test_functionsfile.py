@@ -149,6 +149,19 @@ class TestPDSystems(unittest.TestCase):
 
         for actor, expected in expected_NPV.items():
             self.assertAlmostEqual(self.pd.NPV[actor], expected, places=3)
+
+    """IPD test"""
+    def test_NPV_for_IPD_(self):
+        self.pd.ipd()
+        expected_NPV = {
+        "vendor": 42.0764,
+        "AE": 93.3633,
+        "constructor": 72.3050,
+        "utility": -2178.447,
+         }
+
+        for actor, expected in expected_NPV.items():
+            self.assertAlmostEqual(self.pd.NPV[actor], expected, places=3)
     
     """Comparing total NPVs across"""
     def test_sum_of_NPVs_for_each_contract(self):
@@ -159,7 +172,11 @@ class TestPDSystems(unittest.TestCase):
         self.pd.cost_plus()
         cp_total = sum(self.pd.NPV.values())
 
-        self.assertAlmostEqual(fp_total,cp_total,places = 3)
+        self.setUp()
+        self.pd.IPD()
+        IPD_total = sum(self.pd.NPV.values())
+
+        self.assertAlmostEqual(fp_total,cp_total,IPD_total,places = 3)
         
 
 
