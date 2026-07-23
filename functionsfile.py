@@ -15,8 +15,6 @@ class PDSystems:
         self.inputs = inputs
         
         # unpack inputs
-        #self.design_time = inputs["design_time"]
-        #self.build_time = inputs["build_time"]
         self.operating_time = inputs["operating_time"]
         self.commission_time = inputs["commission_time"]
 
@@ -67,10 +65,6 @@ class PDSystems:
         self.full_progress_array = np.zeros_like(self.actual_year)
         end_index = len(self.actual_progress)
         self.full_progress_array[:end_index] = self.actual_progress
-        #print(self.full_progress_array)
-        """start_index = 0
-        end_index = start_index + actual_progress.shape[0]
-        progress_array[start_index:end_index] = actual_progress"""
 
         #Setup masks
         self.mask_design = self.actual_year < self.actual_design_time
@@ -79,9 +73,6 @@ class PDSystems:
             & (self.actual_year < self.actual_design_time + self.actual_build_time)
         )
         self.mask_om = self.actual_year >= (self.actual_design_time + self.actual_build_time)
-        #mask_design = year < actual_design_time
-        #mask_build = (year >= actual_design_time) & (year < actual_design_time + actual_build_time)
-        #mask_om = year >= (actual_design_time + actual_build_time)
 
         #Dictionaries for payouts
         self.om_costs = {}
@@ -110,6 +101,12 @@ class PDSystems:
         self.actual_costs = {}
         self.target_costs = {}
         self.cumulative_actual_cost = {}
+        self.cost_variance = {}
+        self.contingency_pool = {}
+        self.unlocked_pool = {}
+        self.actor_unlocked_pool = {}
+        self.actor_contingency_pool = {}
+        self.available_profit_pool = {}
         self.ipd_disc_costs = {}
         self.ipd_payment = {}
         self.ipd_nondisc_revenue = {}
@@ -488,42 +485,10 @@ class PDSystems:
 
     """IPD"""
     def ipd(self):
-        self.completion_index(self.full_progress_array) 
+        #self.completion_index(self.full_progress_array) 
         self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
 
         #partial progress costs and revenues
-        """self.design_costs = self.distribute_progress_costs(
-        self.actual_design_progress,
-        phase_cost=self.design_cost,
-        phase_start=0,
-        phase_length=self.actual_design_time,
-        shares=self.percent_design,
-        )
-
-        self.build_costs = self.distribute_progress_costs(
-        self.actual_build_progress,
-        phase_cost=self.build_cost,
-        phase_start=self.actual_design_time,
-        phase_length=self.actual_build_time,
-        shares=self.percent_build,
-        )
-
-        self.design_payments = self.distribute_progress_payments(
-        self.actual_design_progress,
-        phase_cost=self.design_cost,
-        phase_start=0,
-        phase_length=self.actual_design_time,
-        shares=self.percent_design,
-        )
-
-        self.build_payments = self.distribute_progress_payments(
-        self.actual_build_progress,
-        phase_cost=self.build_cost,
-        phase_start=self.actual_design_time,
-        phase_length=self.actual_build_time,
-        shares=self.percent_build,
-        )"""
-
         self.nondisc_target_costs = self.distribute_progress_costs(
         self.target_ipd_progress,
         phase_cost=self.target_ipd_cost,
@@ -556,47 +521,26 @@ class PDSystems:
         shares=self.percent_ipd,
         )
 
-        # Utility may get revenue share from build/design payments if configured (here percent_design_utility = 0)
-        self.ipd_nondisc_utility_revenue = self.design_payments["utility"] + self.build_payments["utility"]
-
-        self.markup = (1 + self.profit_margin)
-
-        # Utility operational revenue (annual), starts only after build is completed + commissioning
-        # Determine actual build completion year mapped to timeline
-        self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
-
-        if self.build_payout_year is not None:
-            self.revenue_start_actual = self.build_payout_year + self.commission_time
-            if self.revenue_start_actual < len(self.actual_year):
-                self.ipd_nondisc_utility_revenue[self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
-                self.ipd_disc_utility_revenue = self.ipd_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.actual_year)
-            else:
-                # revenue start beyond timeline => no revenue recorded
-                pass
-        else:
-            # build never completed -> no operational utility revenue
-            pass
-
-        #not sure if target cost or actual cost makes more sense -> target seems simpler
-        self.target_total_cost = self.target_design_cost + self.target_build_cost
+        """#not sure if target cost or actual cost makes more sense -> target seems simpler
+        #self.target_total_cost = self.target_design_cost + self.target_build_cost
         #self.fp_target_price = (self.target_cost) * (1 + self.contingency) * (1 + self.profit_margin)
-        self.cp_target_price = self.target_total_cost * (1 + self.profit_margin)
-
-        self.crossover_cost = (self.target_ipd_cost / (1 + self.profit_margin)) #does this seem right?
+        #self.cp_target_price = self.target_total_cost * (1 + self.profit_margin)
 
         #TODO: could also make this an input later? 0.5 is just bc between fp = 0 and cp = 1
-        self.ipd_slope = 0.5
+        #self.ipd_slope = 0.5
 
         #maybe an actual cost instead of target here? 
         #TODO: how to calculate this best?
-        if self.target_total_cost <= self.crossover_cost:
-            self.ipd_price = self.target_ipd_cost
-        else:
-            self.ipd_price = self.target_ipd_cost + (self.ipd_slope * max(0, self.target_total_cost - self.crossover_cost))
+        #if self.target_total_cost <= self.crossover_cost:
+        #    self.ipd_price = self.target_ipd_cost
+        #else:
+        #    self.ipd_price = self.target_ipd_cost + (self.ipd_slope * max(0, self.target_total_cost - self.crossover_cost))
 
-        self.ipd_scaler = self.ipd_price / self.cp_target_price
+        #self.ipd_scaler = self.ipd_price / self.cp_target_price
         #self.ipd_scaler2 = self.ipd_target_price / self.cp_target_price
-        #print(self.ipd_scaler2)
+        #print(self.ipd_scaler2)"""
+
+        self.crossover_cost = self.target_ipd_cost
 
         self.actual_cost = np.zeros_like(self.actual_year, dtype=float)
         self.target_cost = np.zeros_like(self.actual_year, dtype=float)
@@ -611,6 +555,20 @@ class PDSystems:
             self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
         
         self.cumulative_actual_cost = np.cumsum(self.actual_cost)
+
+        for actor in self.actors:
+            self.contingency_pool = self.target_ipd_cost * self.profit_margin
+
+            self.cost_variance = self.target_ipd_cost - (self.design_cost + self.build_cost)
+
+            if self.cost_variance <= 0:
+                self.actor_contingency_pool[actor] = self.target_ipd_cost * self.profit_margin * self.percent_ipd[actor]
+                self.unlocked_pool = np.clip(abs(self.cost_variance), 0, self.contingency_pool)
+                self.actor_unlocked_pool[actor] = self.unlocked_pool * self.percent_ipd[actor]
+                self.available_profit_pool[actor] = self.actor_contingency_pool[actor] - self.actor_unlocked_pool[actor]
+            else:
+                self.actor_contingency_pool[actor] = self.target_ipd_cost * self.profit_margin * self.percent_pool_to[actor]
+                self.available_profit_pool[actor] = self.actor_contingency_pool[actor] + (self.cost_variance * self.percent_pool_to[actor])
        
         crossedover = False
 
@@ -620,13 +578,11 @@ class PDSystems:
                 crossedover = True
 
             for actor in self.actors:
-                #self.bonus_rev[actor] = np.zeros_like(self.actual_year, dtype=float)
                 
                 if actor == "utility":
                     self.ipd_disc_revenue["utility"] = np.zeros_like(self.actual_year, dtype=float)
                     continue
                 
-                #ipd_payment_target = self.target_payments[actor][year]
                 ipd_payment_actual = self.actual_payments[actor][year]
 
                 if crossedover:
@@ -635,7 +591,24 @@ class PDSystems:
                     #TODO: look more into this -> I think we'd use the actual bc that's what the project costs were, and target would come in below (for the extra pool)
                     #self.ipd_nondisc_revenue[actor][year] = (ipd_payment_target) * (1 + self.ipd_contingency)
                     self.ipd_nondisc_revenue[actor][year] = (ipd_payment_actual) * (1 + self.ipd_contingency) #might be self.profit_margin not self.ipd_contingency
-    
+
+        # Utility may get revenue share from build/design payments if configured (here percent_design_utility = 0)
+        self.ipd_nondisc_utility_revenue = self.actual_payments["utility"]
+
+        self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
+
+        if self.build_payout_year is not None:
+            self.revenue_start_actual = self.build_payout_year + self.commission_time
+            if self.revenue_start_actual < len(self.actual_year):
+                self.ipd_nondisc_utility_revenue[self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to["utility"]
+                self.ipd_disc_utility_revenue = self.ipd_nondisc_utility_revenue / ((1 + self.discount_rate) ** self.actual_year)
+            else:
+                # revenue start beyond timeline => no revenue recorded
+                pass
+        else:
+            # build never completed -> no operational utility revenue
+            pass
+
         if self.cumulative_actual_cost[self.build_payout_year] < self.target_ipd_cost:
             self.extra_pool = self.target_ipd_cost - self.cumulative_actual_cost[self.build_payout_year]
             
