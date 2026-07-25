@@ -91,11 +91,20 @@ def run_models(inputs):
     m = PDSystems(inputs)
     npvs = {}
     m.fixed_price()
-    npvs["fixed_price"] = dict(m.NPV)
+    npvs["fixed_price"] = {
+        "actors": dict(m.NPV),
+        "total": m.project_NPV
+    }
     m.cost_plus()
-    npvs["cost_plus"] = dict(m.NPV)
+    npvs["cost_plus"] = {
+        "actors": dict(m.NPV),
+        "total": m.project_NPV
+    }
     m.ipd()
-    npvs["ipd"] = dict(m.NPV)
+    npvs["ipd"] = {
+        "actors": dict(m.NPV),
+        "total": m.project_NPV
+    }
     return npvs
 
 
@@ -119,7 +128,8 @@ def main():
         try:
             for model in pds:
                 for actor in actors:
-                    record[f"{model}_npv_{actor}"] = npvs[model][actor]
+                    record[f"{model}_npv_{actor}"] = npvs[model]["actors"][actor]
+                record[f"{model}_npv_total"] = npvs[model]["total"]
         except Exception as e:
             for model in pds:
                 for actor in actors:
