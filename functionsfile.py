@@ -628,10 +628,20 @@ class PDSystems:
                 self.build_used_profit_pool[actor] = 0
                 self.build_profit_pool_earned[actor] = self.build_actor_contingency_pool[actor] + (self.build_cost_variance * self.percent_pool_to[actor])
 
+            # print("design unlocked pool", self.design_unlocked_pool)
+            # print("design_actor_unlocked_pool", self.design_actor_unlocked_pool[actor])
+            # print("design_available_profit_pool", self.design_available_profit_pool[actor])
+            # print("design_profit_pool_earned", self.design_profit_pool_earned[actor])
+            # print("design_used_profit_pool", self.design_used_profit_pool[actor])
+
             self.design_profit_payment[actor][self.design_payout_year] = (self.design_available_profit_pool[actor] + self.design_profit_pool_earned[actor])
             self.build_profit_payment[actor][self.build_payout_year] = (self.build_available_profit_pool[actor] + self.build_profit_pool_earned[actor])
 
         crossedover = False
+
+        for actor in self.actors:
+            self.ipd_nondisc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
 
         for year in range(len(self.actual_year)):
 
@@ -639,9 +649,6 @@ class PDSystems:
                 crossedover = True
 
             for actor in self.actors:
-                self.ipd_nondisc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
-                self.ipd_disc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
-
                 if actor == "utility":
                     self.ipd_disc_revenue["utility"] = np.zeros_like(self.actual_year, dtype=float)
                     continue
@@ -654,13 +661,13 @@ class PDSystems:
                     #TODO: look more into this -> I think we'd use the actual bc that's what the project costs were, and target would come in below (for the extra pool)
                     self.ipd_nondisc_revenue[actor][year] = (ipd_payment_actual) * (1 + self.profit_margin) #might be self.ipd_contingency??
 
-        #print("nondisc before", self.ipd_nondisc_revenue)
+        print("non disc rev", self.ipd_nondisc_revenue)
 
         for actor in self.actors:
             self.ipd_nondisc_revenue[actor] += self.design_profit_payment[actor]
             self.ipd_nondisc_revenue[actor] += self.build_profit_payment[actor]
 
-        #print("nondisc after", self.ipd_nondisc_revenue)
+        print("nondisc after", self.ipd_nondisc_revenue)
         #print("design profit payment", self.design_profit_payment)
         #print("build profit payment", self.build_profit_payment)
 
@@ -698,13 +705,12 @@ class PDSystems:
             self.ipd_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
 
-        for actor in self.actors:
-            #if actor == "utility":
-            #    continue
-            
-            self.ipd_disc_costs["utility"] += self.ipd_disc_revenue[actor]
+        #print("disc rev", self.ipd_disc_revenue)
+        #print("disc costs", self.ipd_disc_costs)
 
         for actor in self.actors:
+            self.ipd_disc_costs["utility"] += self.ipd_disc_revenue[actor]
+
             self.net_disc[actor] = -self.ipd_disc_costs[actor] + self.ipd_disc_revenue[actor]
             
             if actor == "utility":
@@ -722,6 +728,7 @@ class PDSystems:
 
         self.project_NPV = sum(self.NPV.values())
 
+        print("net disc", self.net_disc)
         #print("IPD Utility NPV:    ", self.NPV["utility"])
         #print("IPD total project NPV:", self.NPV)
         
