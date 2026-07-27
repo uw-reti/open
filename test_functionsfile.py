@@ -19,10 +19,12 @@ class TestPDSystems(unittest.TestCase):
         inputs["target_build_cost"] = 2000
         inputs["revenue_per_year"]=100
         inputs["om_per_year"]=50
+        inputs["target_ipd_cost"] = 3000
 
         inputs["discount_rate"]=0.08
         inputs["contingency"]=0.1
         inputs["profit_margin"]=0.1
+        inputs["ipd_contingency"] = 0.1
 
         inputs["actual_design_progress"]=[25,50,75,100]
         inputs["actual_build_progress"]=[25,50,75,100]
@@ -33,6 +35,7 @@ class TestPDSystems(unittest.TestCase):
         inputs["percent_build"]  = {"vendor": 0.1, "AE": 0.4, "constructor": 0.5, "utility": 0}
         inputs["percent_OM_to"]={"vendor": 0, "AE":0, "constructor":0, "utility":1}
         inputs["percent_revenue_to"]={"vendor": 0, "AE":0, "constructor":0, "utility":1}
+        inputs["percent_pool_to"] = {"vendor": 0.1, "AE": 0.1, "constructor": 0.3, "utility": 0.5}
         inputs["actors"] = ["vendor", "AE", "constructor", "utility"]
         self.pd = PDSystems(inputs)
 
@@ -154,10 +157,10 @@ class TestPDSystems(unittest.TestCase):
     def test_NPV_for_IPD_(self):
         self.pd.ipd()
         expected_NPV = {
-        "vendor": 42.0764,
-        "AE": 93.3633,
-        "constructor": 72.3050,
-        "utility": -2178.447,
+        "vendor": 56.5378,
+        "AE": 226.1513,
+        "constructor": 119.7587,
+        "utility": -2373.1501,
          }
 
         for actor, expected in expected_NPV.items():
@@ -173,10 +176,11 @@ class TestPDSystems(unittest.TestCase):
         cp_total = sum(self.pd.NPV.values())
 
         self.setUp()
-        self.pd.IPD()
-        IPD_total = sum(self.pd.NPV.values())
+        self.pd.ipd()
+        ipd_total = sum(self.pd.NPV.values())
 
-        self.assertAlmostEqual(fp_total,cp_total,IPD_total,places = 3)
+        self.assertAlmostEqual(fp_total,cp_total,places = 3)
+        self.assertAlmostEqual(fp_total,ipd_total,places = 3)
         
 
 
