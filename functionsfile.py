@@ -547,27 +547,6 @@ class PDSystems:
         shares=self.percent_build,
         )
 
-        """#not sure if target cost or actual cost makes more sense -> target seems simpler
-        #self.target_total_cost = self.target_design_cost + self.target_build_cost
-        #self.fp_target_price = (self.target_cost) * (1 + self.contingency) * (1 + self.profit_margin)
-        #self.cp_target_price = self.target_total_cost * (1 + self.profit_margin)
-
-        #TODO: could also make this an input later? 0.5 is just bc between fp = 0 and cp = 1
-        #self.ipd_slope = 0.5
-
-        #maybe an actual cost instead of target here? 
-        #TODO: how to calculate this best?
-        #if self.target_total_cost <= self.crossover_cost:
-        #    self.ipd_price = self.target_ipd_cost
-        #else:
-        #    self.ipd_price = self.target_ipd_cost + (self.ipd_slope * max(0, self.target_total_cost - self.crossover_cost))
-
-        #self.ipd_scaler = self.ipd_price / self.cp_target_price
-        #self.ipd_scaler2 = self.ipd_target_price / self.cp_target_price
-        #print(self.ipd_scaler2)"""
-
-        self.crossover_cost = self.target_ipd_cost
-
         self.actual_cost = np.zeros_like(self.actual_year, dtype=float)
         self.target_cost = np.zeros_like(self.actual_year, dtype=float)
         
@@ -593,11 +572,8 @@ class PDSystems:
         self.design_pool = self.target_design_cost * self.profit_margin
         self.build_pool = self.target_build_cost * self.profit_margin
 
-        #self.cost_variance = self.target_ipd_cost - (self.design_cost + self.build_cost)
         self.design_cost_variance = self.target_design_cost - self.design_cost
         self.build_cost_variance = self.target_build_cost - self.build_cost
-        #print("design variance", self.design_cost_variance)
-        #print("build variance", self.build_cost_variance)
 
         for actor in self.actors:
             self.design_profit_payment[actor] = np.zeros_like(self.actual_year, dtype=float)
@@ -628,14 +604,10 @@ class PDSystems:
                 self.build_used_profit_pool[actor] = 0
                 self.build_profit_pool_earned[actor] = self.build_actor_contingency_pool[actor] + (self.build_cost_variance * self.percent_pool_to[actor])
 
-            # print("design unlocked pool", self.design_unlocked_pool)
-            # print("design_actor_unlocked_pool", self.design_actor_unlocked_pool[actor])
-            # print("design_available_profit_pool", self.design_available_profit_pool[actor])
-            # print("design_profit_pool_earned", self.design_profit_pool_earned[actor])
-            # print("design_used_profit_pool", self.design_used_profit_pool[actor])
-
             self.design_profit_payment[actor][self.design_payout_year] = (self.design_available_profit_pool[actor] + self.design_profit_pool_earned[actor])
             self.build_profit_payment[actor][self.build_payout_year] = (self.build_available_profit_pool[actor] + self.build_profit_pool_earned[actor])
+
+        self.crossover_cost = self.target_ipd_cost
 
         crossedover = False
 
@@ -661,13 +633,13 @@ class PDSystems:
                     #TODO: look more into this -> I think we'd use the actual bc that's what the project costs were, and target would come in below (for the extra pool)
                     self.ipd_nondisc_revenue[actor][year] = (ipd_payment_actual) * (1 + self.profit_margin) #might be self.ipd_contingency??
 
-        print("non disc rev", self.ipd_nondisc_revenue)
+        #print("non disc rev", self.ipd_nondisc_revenue)
 
         for actor in self.actors:
             self.ipd_nondisc_revenue[actor] += self.design_profit_payment[actor]
             self.ipd_nondisc_revenue[actor] += self.build_profit_payment[actor]
 
-        print("nondisc after", self.ipd_nondisc_revenue)
+        #print("nondisc after", self.ipd_nondisc_revenue)
         #print("design profit payment", self.design_profit_payment)
         #print("build profit payment", self.build_profit_payment)
 
@@ -728,7 +700,7 @@ class PDSystems:
 
         self.project_NPV = sum(self.NPV.values())
 
-        print("net disc", self.net_disc)
+        #print("net disc", self.net_disc)
         #print("IPD Utility NPV:    ", self.NPV["utility"])
         #print("IPD total project NPV:", self.NPV)
         
