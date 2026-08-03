@@ -137,6 +137,18 @@ class PDSystems:
         idx = np.where(full_progress_array >= 100)[0]
         return int(idx[0]) if idx.size > 0 else None
 
+    def design_completion_payout_year(self, actual_design_progress, actual_design_time):
+        idx = self.completion_index(actual_design_progress)
+        if idx is None:
+            return None
+        
+        # position fraction within build
+        frac = (idx + 1) / self.actual_design_time
+        year_within = int(np.ceil(frac * actual_design_time))  # 1..design_time
+        year_within = max(1, min(actual_design_time, year_within))
+        payout_year = year_within
+        return payout_year
+    
     #fxn that returns the absolute year when build progress reaches 100% (map sample index to a year). If build never reaches 100%, returns None
     def build_completion_payout_year(self, actual_build_progress, actual_design_time, actual_build_time):
         idx = self.completion_index(actual_build_progress)
@@ -575,7 +587,7 @@ class PDSystems:
         
         self.cumulative_actual_cost = np.cumsum(self.actual_cost)
 
-        self.design_payout_year = self.build_completion_payout_year(self.actual_design_progress, 0, self.actual_design_time)
+        self.design_payout_year = self.design_completion_payout_year(self.actual_design_progress, self.actual_design_time)
         self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
 
         """#option 1:
@@ -626,7 +638,7 @@ class PDSystems:
 
         self.crossover_cost = self.target_ipd_cost
 
-        crossedover = False
+        # crossedover = False
 
         for actor in self.actors:
             self.ipd_nondisc_revenue[actor] = np.zeros_like(self.actual_year, dtype=float)
@@ -634,8 +646,8 @@ class PDSystems:
 
         for year in range(len(self.actual_year)):
 
-            if self.cumulative_actual_cost[year] >= self.crossover_cost:
-                crossedover = True
+            # if self.cumulative_actual_cost[year] >= self.crossover_cost:
+            #     crossedover = True
 
             for actor in self.actors:
                 if actor == "utility":
@@ -659,8 +671,8 @@ class PDSystems:
         #     self.ipd_nondisc_revenue[actor] += self.build_profit_payment[actor]
 
         #print("nondisc after", self.ipd_nondisc_revenue)
-        #print("design profit payment", self.design_profit_payment)
-        #print("build profit payment", self.build_profit_payment)
+        # print("design profit payment", self.design_profit_payment)
+        # print("build profit payment", self.build_profit_payment)
 
         """if self.cumulative_actual_cost[self.build_payout_year] < self.target_ipd_cost:
             self.extra_pool = self.target_ipd_cost - self.cumulative_actual_cost[self.build_payout_year]
@@ -696,8 +708,8 @@ class PDSystems:
             self.ipd_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
 
-        #print("disc rev", self.ipd_disc_revenue)
-        #print("disc costs", self.ipd_disc_costs)
+        # print("disc rev", self.ipd_disc_revenue)
+        # print("disc costs", self.ipd_disc_costs)
 
         for actor in self.actors:
             self.ipd_disc_costs["utility"] += self.ipd_disc_revenue[actor]
