@@ -110,6 +110,7 @@ def run_models(inputs):
 
 def main():
     #you have to input your file route here for now.. will update when I ask/figure out how to upload one
+    #input_csv = Path("test_inputs_copy.csv")
     input_csv = Path("test_inputs.csv")
     #input_csv = Path("cost_risk_inputs.csv")
     #input_csv = Path(r"C:\Users\Veronica\Downloads\bl_inputs.csv")

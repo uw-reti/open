@@ -81,10 +81,16 @@ class PDSystems:
 
         self.fp_nondisc_revenue = {}
         self.fp_disc_revenue = {}
+        self.design_upfront_payout = {}
+        self.build_upfront_payout = {}
+        self.design_upfront_payout_amount = {}
+        self.build_upfront_payout_amount = {}
         self.fp_design_payout_amount={}
         self.fp_build_payout_amount={}
         self.disc_target_design_costs={}
         self.disc_target_build_costs={}
+        self.design_remaining_amount = {}
+        self.build_remaining_amount = {}
 
         self.cp_disc_costs = {}
         self.cp_nondisc_revenue = {}
@@ -240,8 +246,6 @@ class PDSystems:
 
     """FIXED PRICE"""
     def fixed_price(self):
-        self.completion_index(self.full_progress_array)
-
         def completion_payout_year(actual_progress):
             """
             Map design progress index to payout year. We assume design progress array starts at design year 0 and payout historically
@@ -254,8 +258,8 @@ class PDSystems:
             return idx + 1
 
         #determine actual payout years from actual progress arrays
-        self.build_payout_year = completion_payout_year(self.actual_build_progress)+len(self.actual_design_progress)
-        self.build_target_payout_year = completion_payout_year(self.target_build_progress)+len(self.target_design_progress)
+        self.build_payout_year = completion_payout_year(self.actual_build_progress) + len(self.actual_design_progress)
+        self.build_target_payout_year = completion_payout_year(self.target_build_progress) + len(self.target_design_progress)
 
         #this could be an optional true/false "button" where we can decide if we want to wait to pay out design until after build is complete (wait until build is complete = false)
         self.fp_design_payout_milestone = True
@@ -267,6 +271,9 @@ class PDSystems:
             self.design_target_payout_year = self.build_target_payout_year 
             
         self.actual_build_time = self.build_payout_year - self.actual_design_time
+
+        self.design_upfront = 0.25 * self.target_design_cost
+        self.build_upfront = 0.25 * self.target_build_cost
         
         self.target_design_costs = self.distribute_progress_costs(
         self.target_design_progress,
@@ -283,8 +290,7 @@ class PDSystems:
         phase_length=self.target_build_time,
         shares=self.percent_build,
         )
-        
-        
+
         self.design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
@@ -307,12 +313,17 @@ class PDSystems:
             self.disc_build_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.disc_target_design_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.disc_target_build_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.design_remaining_amount[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.build_remaining_amount[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.disc_om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.nondisc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.fp_nondisc_revenue[actor]= np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
 
         for actor in self.actors:
+            self.design_upfront_payout[actor] = (self.design_upfront * self.percent_design[actor])
+            self.build_upfront_payout[actor] = (self.build_upfront * self.percent_build[actor])
+
             #non-discounted costs
             self.om_costs[actor][self.mask_om] = (self.OM_per_year * self.percent_OM_to[actor])           
             self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs[actor])
@@ -327,14 +338,24 @@ class PDSystems:
             self.disc_om_costs[actor] = (self.om_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
             self.disc_costs[actor] = (self.disc_design_costs[actor] + self.disc_build_costs[actor] + self.disc_om_costs[actor])
             
+            self.design_remaining_amount[actor] = np.sum(self.disc_target_design_costs[actor]) - self.design_upfront_payout[actor]
+            self.build_remaining_amount[actor] = np.sum(self.disc_target_build_costs[actor]) - self.build_upfront_payout[actor]
+
             #payouts per actor per phase
-            self.fp_design_payout_amount[actor] = (np.sum(self.disc_target_design_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.design_payout_year
-            self.fp_build_payout_amount[actor] = (np.sum(self.disc_target_build_costs[actor])) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.build_payout_year
+            self.design_upfront_payout_amount[actor] = (self.design_upfront_payout[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
+            self.build_upfront_payout_amount[actor] = (self.build_upfront_payout[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             
+            self.fp_design_payout_amount[actor] = (self.design_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.design_payout_year
+            self.fp_build_payout_amount[actor] = (self.build_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.build_payout_year
+            
+            self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
             self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
+            self.fp_nondisc_revenue[actor][self.design_payout_year] += self.build_upfront_payout_amount[actor]
             self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
             
+            self.fp_nondisc_revenue["utility"][0] -= self.design_upfront_payout_amount[actor]
             self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.fp_design_payout_amount[actor]
+            self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.build_upfront_payout_amount[actor]
             self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
             
             #utility rev: only begins after build completion + commissioning
@@ -345,7 +366,7 @@ class PDSystems:
                 else:
                     # if revenue start beyond timeline, no revenue is recorded
                     pass
-                
+
         for actor in self.actors:
             #fixed price discounted revenues
             self.fp_disc_revenue[actor] = self.fp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
@@ -377,10 +398,6 @@ class PDSystems:
 
     """COST+"""
     def cost_plus(self):
-        #self.completion_index(self.full_progress_array)
-
-        self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
-
         #partial progress costs and revenues
         self.design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
@@ -627,17 +644,19 @@ class PDSystems:
                 
                 ipd_payment_actual = self.design_payments[actor][year] + self.build_payments[actor][year]
 
-                if crossedover:
-                    self.ipd_nondisc_revenue[actor][year] = ipd_payment_actual
-                else:
-                    #TODO: look more into this -> I think we'd use the actual bc that's what the project costs were, and target would come in below (for the extra pool)
-                    self.ipd_nondisc_revenue[actor][year] = (ipd_payment_actual) * (1 + self.profit_margin) #might be self.ipd_contingency??
+                self.ipd_nondisc_revenue[actor][year] = ipd_payment_actual + self.design_profit_payment[actor][year] + self.build_profit_payment[actor][year]
+
+                # if crossedover:
+                #     self.ipd_nondisc_revenue[actor][year] = ipd_payment_actual
+                # else:
+                #     #TODO: look more into this -> I think we'd use the actual bc that's what the project costs were, and target would come in below (for the extra pool)
+                #     self.ipd_nondisc_revenue[actor][year] = (ipd_payment_actual) * (1 + self.profit_margin) #might be self.ipd_contingency??
 
         #print("non disc rev", self.ipd_nondisc_revenue)
 
-        for actor in self.actors:
-            self.ipd_nondisc_revenue[actor] += self.design_profit_payment[actor]
-            self.ipd_nondisc_revenue[actor] += self.build_profit_payment[actor]
+        # for actor in self.actors:
+        #     self.ipd_nondisc_revenue[actor] += self.design_profit_payment[actor]
+        #     self.ipd_nondisc_revenue[actor] += self.build_profit_payment[actor]
 
         #print("nondisc after", self.ipd_nondisc_revenue)
         #print("design profit payment", self.design_profit_payment)
