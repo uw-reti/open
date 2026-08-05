@@ -99,10 +99,10 @@ class PDSystems:
         self.cp_disc_operating_revenue = {}
 
         self.nondisc_actual_costs = {}
-        self.actual_design_costs = {}
-        self.actual_build_costs = {}
-        self.target_costs = {}
-        self.cumulative_actual_cost = {}
+        #self.actual_design_costs = {}
+        #self.actual_build_costs = {}
+        #self.target_costs = {}
+        #self.cumulative_actual_cost = {}
         self.design_cost_variance = {}
         self.build_cost_variance = {}
         self.contingency_pool = {}
@@ -576,7 +576,7 @@ class PDSystems:
         shares=self.percent_build,
         )
 
-        self.actual_cost = np.zeros_like(self.actual_year, dtype=float)
+        """self.actual_cost = np.zeros_like(self.actual_year, dtype=float)
         self.target_cost = np.zeros_like(self.actual_year, dtype=float)
         
         for actor in self.actors:
@@ -585,7 +585,7 @@ class PDSystems:
             self.actual_build_costs[actor] = np.array(self.build_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.actual_cost += self.actual_build_costs[actor]  
         
-        self.cumulative_actual_cost = np.cumsum(self.actual_cost)
+        self.cumulative_actual_cost = np.cumsum(self.actual_cost)"""
 
         self.design_payout_year = self.design_completion_payout_year(self.actual_design_progress, self.actual_design_time)
         self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
@@ -636,7 +636,7 @@ class PDSystems:
             self.design_profit_payment[actor][self.design_payout_year] = (self.design_available_profit_pool[actor] + self.design_profit_pool_earned[actor])
             self.build_profit_payment[actor][self.build_payout_year] = (self.build_available_profit_pool[actor] + self.build_profit_pool_earned[actor])
 
-        self.crossover_cost = self.target_ipd_cost
+        #self.crossover_cost = self.target_ipd_cost
 
         # crossedover = False
 
@@ -658,7 +658,7 @@ class PDSystems:
 
                 self.ipd_nondisc_revenue[actor][year] = ipd_payment_actual + self.design_profit_payment[actor][year] + self.build_profit_payment[actor][year]
 
-                # if crossedover:
+                """# if crossedover:
                 #     self.ipd_nondisc_revenue[actor][year] = ipd_payment_actual
                 # else:
                 #     #TODO: look more into this -> I think we'd use the actual bc that's what the project costs were, and target would come in below (for the extra pool)
@@ -672,7 +672,7 @@ class PDSystems:
 
         #print("nondisc after", self.ipd_nondisc_revenue)
         # print("design profit payment", self.design_profit_payment)
-        # print("build profit payment", self.build_profit_payment)
+        # print("build profit payment", self.build_profit_payment)"""
 
         """if self.cumulative_actual_cost[self.build_payout_year] < self.target_ipd_cost:
             self.extra_pool = self.target_ipd_cost - self.cumulative_actual_cost[self.build_payout_year]
