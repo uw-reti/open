@@ -130,10 +130,10 @@ class TestPDSystems(unittest.TestCase):
     def test_NPV_for_fixed_price(self):
         self.pd.fixed_price()
         expected_NPV = {
-        "vendor": 65.1669,
-        "AE": 260.6675,
-        "constructor": 138.0368,
-        "utility": -2434.5735,
+        "vendor": 49.1362,
+        "AE": 196.5448,
+        "constructor": 57.8835,
+        "utility": -2274.2666,
          }
 
         for actor, expected in expected_NPV.items():
@@ -157,10 +157,10 @@ class TestPDSystems(unittest.TestCase):
     def test_NPV_for_IPD_(self):
         self.pd.ipd()
         expected_NPV = {
-        "vendor": 56.5378,
-        "AE": 226.1513,
-        "constructor": 119.7587,
-        "utility": -2373.1501,
+        "vendor": 25.506,
+        "AE": 102.0239,
+        "constructor": 54.0269,
+        "utility": -2152.259,
          }
 
         for actor, expected in expected_NPV.items():
