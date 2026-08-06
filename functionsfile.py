@@ -630,10 +630,8 @@ class PDSystems:
                 profit_used = min(remaining_overrun, self.design_profit_pool)
                 profit_remaining = self.design_profit_pool - profit_used
 
-                self.design_available_contingency_pool[actor] = contingency_remaining * self.percent_design[actor]
-                self.design_available_profit_pool[actor] = profit_remaining * self.percent_design[actor]
-
-                self.design_profit_pool_earned[actor] = 0
+                self.design_available_contingency_pool[actor] = contingency_remaining * self.percent_pool_to[actor]
+                self.design_available_profit_pool[actor] = profit_remaining * self.percent_pool_to[actor]
 
                 # self.design_unlocked_pool = np.clip(abs(self.design_cost_variance), 0, self.design_profit_pool)
                 # self.design_actor_unlocked_pool[actor] = self.design_unlocked_pool * self.percent_design[actor]
@@ -642,8 +640,8 @@ class PDSystems:
                 # self.design_used_profit_pool[actor] = (self.design_profit_pool - self.design_unlocked_pool) * self.percent_design[actor]
             else:
                 self.design_available_contingency_pool[actor] = self.design_actor_contingency_pool[actor]
-                self.design_available_profit_pool[actor] = self.design_actor_profit_pool[actor]
-                self.design_profit_pool_earned[actor] = self.design_cost_variance * self.percent_pool_to[actor]
+                self.design_available_profit_pool[actor] = self.design_cost_variance * self.percent_pool_to[actor]
+
                 # self.design_available_profit_pool[actor] = 0
                 # self.design_used_profit_pool[actor] = 0
                 # self.design_profit_pool_earned[actor] = self.design_actor_contingency_pool[actor] + (self.design_cost_variance * self.percent_pool_to[actor])
@@ -659,10 +657,8 @@ class PDSystems:
                 profit_used = min(remaining_overrun, self.build_profit_pool)
                 profit_remaining = self.build_profit_pool - profit_used
 
-                self.build_available_contingency_pool[actor] = contingency_remaining * self.percent_build[actor]
-                self.build_available_profit_pool[actor] = profit_remaining * self.percent_build[actor]
-
-                self.build_profit_pool_earned[actor] = 0
+                self.build_available_contingency_pool[actor] = contingency_remaining * self.percent_pool_to[actor]
+                self.build_available_profit_pool[actor] = profit_remaining * self.percent_pool_to[actor]
 
                 # self.build_unlocked_pool = np.clip(abs(self.build_cost_variance), 0, self.build_profit_pool)
                 # self.build_actor_unlocked_pool[actor] = self.build_unlocked_pool * self.percent_build[actor]
@@ -671,16 +667,14 @@ class PDSystems:
                 # self.build_used_profit_pool[actor] = (self.build_profit_pool - self.build_unlocked_pool) * self.percent_build[actor]
             else:
                 self.build_available_contingency_pool[actor] = self.build_actor_contingency_pool[actor]
-                self.build_available_profit_pool[actor] = self.build_actor_profit_pool[actor]
-
-                self.build_profit_pool_earned[actor] = self.build_cost_variance * self.percent_pool_to[actor]
+                self.build_available_profit_pool[actor] = self.build_cost_variance * self.percent_pool_to[actor]
 
                 # self.build_available_profit_pool[actor] = 0
                 # self.build_used_profit_pool[actor] = 0
                 # self.build_profit_pool_earned[actor] = self.build_actor_contingency_pool[actor] + (self.build_cost_variance * self.percent_pool_to[actor])
 
-            self.design_profit_payment[actor][self.design_payout_year] = self.design_available_contingency_pool[actor] + self.design_available_profit_pool[actor] + self.design_profit_pool_earned[actor]
-            self.build_profit_payment[actor][self.build_payout_year] = self.build_available_contingency_pool[actor] + self.build_available_profit_pool[actor] + self.build_profit_pool_earned[actor]
+            self.design_profit_payment[actor][self.design_payout_year] = self.design_available_contingency_pool[actor] + self.design_available_profit_pool[actor]
+            self.build_profit_payment[actor][self.build_payout_year] = self.build_available_contingency_pool[actor] + self.build_available_profit_pool[actor]
             # self.design_profit_payment[actor][self.design_payout_year] = (self.design_available_profit_pool[actor] + self.design_profit_pool_earned[actor])
             # self.build_profit_payment[actor][self.build_payout_year] = (self.build_available_profit_pool[actor] + self.build_profit_pool_earned[actor])
 
