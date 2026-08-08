@@ -348,15 +348,17 @@ class PDSystems:
             self.disc_om_costs[actor] = (self.om_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
             self.disc_costs[actor] = (self.disc_design_costs[actor] + self.disc_build_costs[actor] + self.disc_om_costs[actor])
             
-            self.design_remaining_amount[actor] = np.sum(self.disc_target_design_costs[actor]) - self.design_upfront_payout[actor]
-            self.build_remaining_amount[actor] = np.sum(self.disc_target_build_costs[actor]) - self.build_upfront_payout[actor]
+            # self.design_remaining_amount[actor] = np.sum(self.disc_target_design_costs[actor]) - self.design_upfront_payout[actor]
+            # self.build_remaining_amount[actor] = np.sum(self.disc_target_build_costs[actor]) - self.build_upfront_payout[actor]
+            self.design_remaining_amount[actor] = self.target_design_cost * 0.75 * self.percent_design[actor]
+            self.build_remaining_amount[actor] = self.target_build_cost * 0.75 * self.percent_build[actor]
 
             #payouts per actor per phase
             self.design_upfront_payout_amount[actor] = (self.design_upfront_payout[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             self.build_upfront_payout_amount[actor] = (self.build_upfront_payout[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             
-            self.fp_design_payout_amount[actor] = (self.design_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.design_payout_year
-            self.fp_build_payout_amount[actor] = (self.build_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.build_payout_year
+            self.fp_design_payout_amount[actor] = (self.design_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
+            self.fp_build_payout_amount[actor] = (self.build_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             
             self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
             self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
@@ -369,7 +371,7 @@ class PDSystems:
             self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
             
             #utility rev: only begins after build completion + commissioning
-            if self.build_payout_year is not None:
+            if self.build_payout_year is not None and self.build_payout_year >= 0:
                 revenue_start_actual = self.build_payout_year + self.commission_time
                 if revenue_start_actual < len(self.actual_year):
                     self.fp_nondisc_revenue[actor][self.actual_year >= revenue_start_actual] = self.revenue_per_year * self.percent_revenue_to[actor]
