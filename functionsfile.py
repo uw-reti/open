@@ -72,9 +72,15 @@ class PDSystems:
         #Dictionaries for payouts
         self.om_costs = {}
         
-        self.nondisc_costs = {}
-        self.disc_costs = {}
-        self.net_disc = {}
+        self.fp_nondisc_costs = {}
+        self.cp_nondisc_costs = {}
+        self.ipd_nondisc_costs = {}
+        self.fp_disc_costs = {}
+        self.cp_disc_costs = {}
+        self.ipd_disc_costs = {}
+        self.fp_net_disc = {}
+        self.cp_net_disc = {}
+        self.ipd_net_disc = {}
         self.disc_design_costs = {}
         self.disc_build_costs = {}
         self.disc_om_costs = {}
@@ -92,7 +98,6 @@ class PDSystems:
         self.design_remaining_amount = {}
         self.build_remaining_amount = {}
 
-        self.cp_disc_costs = {}
         self.cp_nondisc_revenue = {}
         self.cp_disc_revenue = {}
         self.cp_nondisc_operating_revenue = {}
@@ -117,16 +122,20 @@ class PDSystems:
         self.build_profit_payment = {}
         self.design_used_profit_pool = {}
         self.build_used_profit_pool = {}
-        self.ipd_disc_costs = {}
         self.ipd_payment = {}
         self.ipd_nondisc_revenue = {}
         self.ipd_disc_revenue = {}
-
         self.bonus_rev = {}
 
-        self.NPV_timepath = {}
-        self.cost_timepath = {}
-        self.revenue_timepath = {}
+        self.fp_NPV_timepath = {}
+        self.cp_NPV_timepath = {}
+        self.ipd_NPV_timepath = {}
+        self.fp_cost_timepath = {}
+        self.cp_cost_timepath = {}
+        self.ipd_cost_timepath = {}
+        self.fp_revenue_timepath = {}
+        self.cp_revenue_timepath = {}
+        self.ipd_revenue_timepath = {}
         self.NPV = {}
         self.project_NPV = 0.0
 
@@ -279,13 +288,11 @@ class PDSystems:
         else:
             self.design_payout_year = self.build_payout_year
             self.design_target_payout_year = self.build_target_payout_year 
-            
-        self.actual_build_time = self.build_payout_year - self.actual_design_time
 
         self.design_upfront = 0.25 * self.target_design_cost
         self.build_upfront = 0.25 * self.target_build_cost
         
-        self.target_design_costs = self.distribute_progress_costs(
+        self.fp_target_design_costs = self.distribute_progress_costs(
         self.target_design_progress,
         phase_cost=self.target_design_cost,
         phase_start=0,
@@ -293,7 +300,7 @@ class PDSystems:
         shares=self.percent_design,
         )
         
-        self.target_build_costs = self.distribute_progress_costs(
+        self.fp_target_design_costs = self.distribute_progress_costs(
         self.target_build_progress,
         phase_cost=self.target_build_cost,
         phase_start=self.target_design_time,
@@ -301,7 +308,7 @@ class PDSystems:
         shares=self.percent_build,
         )
 
-        self.design_costs = self.distribute_progress_costs(
+        self.fp_design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -309,7 +316,7 @@ class PDSystems:
         shares=self.percent_design,
         )
 
-        self.build_costs = self.distribute_progress_costs(
+        self.fp_build_costs = self.distribute_progress_costs(
         self.actual_build_progress,
         phase_cost=self.build_cost,
         phase_start=self.actual_design_time,
@@ -326,9 +333,19 @@ class PDSystems:
             self.design_remaining_amount[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.build_remaining_amount[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.disc_om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
-            self.nondisc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.fp_nondisc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.fp_nondisc_revenue[actor]= np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
+
+        self.ld_rate = 0.05 #need to make a variable later
+
+        if self.build_payout_year is None:
+            delay = self.actual_build_time
+        else:
+            delay = max(0, self.build_payout_year - self.build_target_payout_year)
+
+        self.ld_penalty = 0    
+        self.ld_penalty = delay * self.ld_rate * self.target_build_cost
 
         for actor in self.actors:
             self.design_upfront_payout[actor] = (self.design_upfront * self.percent_design[actor])
@@ -336,40 +353,48 @@ class PDSystems:
 
             #non-discounted costs
             self.om_costs[actor][self.mask_om] = (self.OM_per_year * self.percent_OM_to[actor])           
-            self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs[actor])
+            self.fp_nondisc_costs[actor] = (self.fp_design_costs[actor] + self.fp_build_costs[actor] + self.om_costs[actor])
             
             #discounted costs
-            self.disc_design_costs[actor] = (self.design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
-            self.disc_build_costs[actor] = (self.build_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            self.disc_design_costs[actor] = (self.fp_design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            self.disc_build_costs[actor] = (self.fp_build_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
             
-            self.disc_target_design_costs[actor] = (self.target_design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
-            self.disc_target_build_costs[actor]  = (self.target_build_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            self.disc_target_design_costs[actor] = (self.fp_target_design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
+            self.disc_target_build_costs[actor]  = (self.fp_target_design_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
             
             self.disc_om_costs[actor] = (self.om_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
-            self.disc_costs[actor] = (self.disc_design_costs[actor] + self.disc_build_costs[actor] + self.disc_om_costs[actor])
+            self.fp_disc_costs[actor] = (self.disc_design_costs[actor] + self.disc_build_costs[actor] + self.disc_om_costs[actor])
             
-            self.design_remaining_amount[actor] = np.sum(self.disc_target_design_costs[actor]) - self.design_upfront_payout[actor]
-            self.build_remaining_amount[actor] = np.sum(self.disc_target_build_costs[actor]) - self.build_upfront_payout[actor]
+            # self.design_remaining_amount[actor] = np.sum(self.disc_target_design_costs[actor]) - self.design_upfront_payout[actor]
+            # self.build_remaining_amount[actor] = np.sum(self.disc_target_build_costs[actor]) - self.build_upfront_payout[actor]
+            self.design_remaining_amount[actor] = self.target_design_cost * 0.75 * self.percent_design[actor]
+            self.build_remaining_amount[actor] = self.target_build_cost * 0.75 * self.percent_build[actor]
 
             #payouts per actor per phase
             self.design_upfront_payout_amount[actor] = (self.design_upfront_payout[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             self.build_upfront_payout_amount[actor] = (self.build_upfront_payout[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             
-            self.fp_design_payout_amount[actor] = (self.design_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.design_payout_year
-            self.fp_build_payout_amount[actor] = (self.build_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin) * (1 + self.discount_rate)**self.build_payout_year
-            
-            self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
-            self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
-            self.fp_nondisc_revenue[actor][self.design_payout_year] += self.build_upfront_payout_amount[actor]
-            self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
-            
-            self.fp_nondisc_revenue["utility"][0] -= self.design_upfront_payout_amount[actor]
-            self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.fp_design_payout_amount[actor]
-            self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.build_upfront_payout_amount[actor]
-            self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
+            self.fp_design_payout_amount[actor] = (self.design_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
+            self.fp_build_payout_amount[actor] = (self.build_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
+
+            #liquidated damages
+            if self.build_payout_year is not None:
+                penalty = self.ld_penalty * self.percent_build[actor]
+                self.fp_build_payout_amount[actor] -= penalty
+                self.fp_nondisc_revenue["utility"][self.build_payout_year] += penalty
+                
+                self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
+                self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
+                self.fp_nondisc_revenue[actor][self.design_payout_year] += self.build_upfront_payout_amount[actor]
+                self.fp_nondisc_revenue[actor][self.build_payout_year] += self.fp_build_payout_amount[actor]
+                
+                self.fp_nondisc_revenue["utility"][0] -= self.design_upfront_payout_amount[actor]
+                self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.fp_design_payout_amount[actor]
+                self.fp_nondisc_revenue["utility"][self.design_payout_year] -= self.build_upfront_payout_amount[actor]
+                self.fp_nondisc_revenue["utility"][self.build_payout_year] -= self.fp_build_payout_amount[actor]
             
             #utility rev: only begins after build completion + commissioning
-            if self.build_payout_year is not None:
+            if self.build_payout_year is not None and self.build_payout_year >= 0:
                 revenue_start_actual = self.build_payout_year + self.commission_time
                 if revenue_start_actual < len(self.actual_year):
                     self.fp_nondisc_revenue[actor][self.actual_year >= revenue_start_actual] = self.revenue_per_year * self.percent_revenue_to[actor]
@@ -381,27 +406,19 @@ class PDSystems:
             #fixed price discounted revenues
             self.fp_disc_revenue[actor] = self.fp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
             #net disc flows
-            self.net_disc[actor] = -self.disc_costs[actor] + self.fp_disc_revenue[actor]
+            self.fp_net_disc[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.fp_net_disc[actor] = -self.fp_disc_costs[actor] + self.fp_disc_revenue[actor]
             #npv cumulative sums (NPV at each year)
-            self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
+            self.fp_NPV_timepath[actor] = np.cumsum(self.fp_net_disc[actor])
             #cumulative costs
-            self.cost_timepath[actor] = np.cumsum(self.disc_costs[actor])
+            self.fp_cost_timepath[actor] = np.cumsum(self.fp_disc_costs[actor])
             #cumulative revenues
-            self.revenue_timepath[actor] = np.cumsum(self.fp_disc_revenue[actor])
+            self.fp_revenue_timepath[actor] = np.cumsum(self.fp_disc_revenue[actor])
             
             # total NPV (end of timeline)
-            self.NPV[actor] = float(self.NPV_timepath[actor][-1])
+            self.NPV[actor] = float(self.fp_NPV_timepath[actor][-1])
 
         self.project_NPV = sum(self.NPV.values())
-
-        #print("Design payout year (computed):", self.design_payout_year)
-        #print("Build payout year (computed):", self.build_payout_year)
-        #print("Fixed Price revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
-        
-        #self.NPVprint()
-        #self.print_npv_timepaths("Fixed price",self.NPV_timepath,"NPV")
-        #self.print_npv_timepaths("Fixed price",self.cost_timepath,"Costs")
-        #self.print_npv_timepaths("Fixed price",self.revenue_timepath,"Revenue")
 
 
 
@@ -409,7 +426,7 @@ class PDSystems:
     """COST+"""
     def cost_plus(self):
         #partial progress costs and revenues
-        self.design_costs = self.distribute_progress_costs(
+        self.cp_design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -417,7 +434,7 @@ class PDSystems:
         shares=self.percent_design,
         )
 
-        self.build_costs = self.distribute_progress_costs(
+        self.cp_build_costs = self.distribute_progress_costs(
         self.actual_build_progress,
         phase_cost=self.build_cost,
         phase_start=self.actual_design_time,
@@ -442,18 +459,31 @@ class PDSystems:
         )
         
         #set the costplus markup
-        self.markup = (1 + self.profit_margin) #BL: I believe that contingency shouldnt be applied on cost-plus
+        self.markup = (1 + self.profit_margin)
+
+        self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
+
+        self.ld_rate = 0.05
+
+        if self.build_payout_year is None:
+            delay = self.actual_build_time
+        else:
+            delay = max(0, self.build_payout_year - self.build_target_payout_year)
+
+        self.ld_penalty = 0
+        self.ld_penalty = delay * self.ld_rate * self.target_build_cost
         
         self.cp_disc_revenue = {actor: np.zeros_like(self.actual_year, dtype=float) for actor in self.actors}
+        self.cp_nondisc_revenue = {actor: np.zeros_like(self.actual_year, dtype=float) for actor in self.actors}
 
         for actor in self.actors:
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[actor][self.mask_om] = (self.OM_per_year * self.percent_OM_to[actor])
             
-            self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs[actor])
+            self.cp_nondisc_costs[actor] = (self.cp_design_costs[actor] + self.cp_build_costs[actor] + self.om_costs[actor])
             
             self.cp_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
-            self.cp_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            self.cp_disc_costs[actor] = np.array(self.cp_nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
 
         for actor in self.actors:
             if actor == "utility":
@@ -461,6 +491,13 @@ class PDSystems:
                 continue
 
             self.cp_nondisc_revenue[actor] = (self.design_payments[actor] + self.build_payments[actor])
+
+
+        for actor in self.actors:
+            if self.build_payout_year is not None:
+                penalty = self.ld_penalty * self.percent_build[actor]
+                self.cp_nondisc_revenue[actor][self.build_payout_year] -= penalty
+                self.cp_nondisc_revenue["utility"][self.build_payout_year] += penalty
 
             self.cp_disc_revenue[actor] = np.array(self.cp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.cp_disc_revenue[actor] *= self.markup
@@ -476,13 +513,9 @@ class PDSystems:
         self.cp_disc_operating_revenue = {actor: np.zeros_like(self.actual_year, dtype=float) for actor in self.actors}
 
         # Utility operational revenue (annual), starts only after build is completed + commissioning
-        # Determine actual build completion year mapped to timeline
-        #TODO: this doesnt currently configure to let others take a share of the profit. Need to expand to all actors
-        self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
         if self.build_payout_year is not None:
             self.revenue_start_actual = self.build_payout_year + self.commission_time
             if self.revenue_start_actual < len(self.actual_year):
-                """TODO: review"""
                 for actor in self.actors:
                     self.cp_nondisc_operating_revenue[actor][self.actual_year >= self.revenue_start_actual] += self.revenue_per_year * self.percent_revenue_to[actor]
                     self.cp_disc_operating_revenue[actor] = self.cp_nondisc_operating_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year)
@@ -497,26 +530,21 @@ class PDSystems:
         for actor in self.actors:
             self.cp_disc_revenue[actor] += self.cp_disc_operating_revenue[actor]
 
-            self.net_disc[actor] = -self.cp_disc_costs[actor] + self.cp_disc_revenue[actor]
+            self.cp_net_disc[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.cp_net_disc[actor] = -self.cp_disc_costs[actor] + self.cp_disc_revenue[actor]
             
             #npv cumulative sums (NPV at each year)
-            self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
+            self.cp_NPV_timepath[actor] = np.cumsum(self.cp_net_disc[actor])
             #cumulative costs
-            self.cost_timepath[actor] = np.cumsum(self.cp_disc_costs[actor])
+            self.cp_cost_timepath[actor] = np.cumsum(self.cp_disc_costs[actor])
             #cumulative revenues
-            self.revenue_timepath[actor] = np.cumsum(self.cp_disc_revenue[actor])
+            self.cp_revenue_timepath[actor] = np.cumsum(self.cp_disc_revenue[actor])
             
             # total NPV (end of timeline)
-            self.NPV[actor] = float(self.NPV_timepath[actor][-1])
+            self.NPV[actor] = float(self.cp_NPV_timepath[actor][-1])
 
         self.project_NPV = sum(self.NPV.values())
 
-        #print("Cost+ revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
-
-        #self.NPVprint()
-        #self.print_npv_timepaths("Cost plus",self.NPV_timepath,"NPV")
-        #self.print_npv_timepaths("Cost plus",self.cost_timepath,"Costs")
-        #self.print_npv_timepaths("Cost plus",self.revenue_timepath,"Revenue")
 
 
 
@@ -524,7 +552,7 @@ class PDSystems:
     """IPD"""
     def ipd(self):
         #partial progress costs and revenues
-        self.target_design_costs = self.distribute_progress_costs(
+        self.ipd_target_design_costs = self.distribute_progress_costs(
         self.target_design_progress,
         phase_cost=self.target_design_cost,
         phase_start=0,
@@ -532,7 +560,7 @@ class PDSystems:
         shares=self.percent_design,
         )
         
-        self.target_build_costs = self.distribute_progress_costs(
+        self.ipd_target_design_costs = self.distribute_progress_costs(
         self.target_build_progress,
         phase_cost=self.target_build_cost,
         phase_start=self.target_design_time,
@@ -541,7 +569,7 @@ class PDSystems:
         )
         
         
-        self.design_costs = self.distribute_progress_costs(
+        self.ipd_design_costs = self.distribute_progress_costs(
         self.actual_design_progress,
         phase_cost=self.design_cost,
         phase_start=0,
@@ -549,7 +577,7 @@ class PDSystems:
         shares=self.percent_design,
         )
 
-        self.build_costs = self.distribute_progress_costs(
+        self.ipd_build_costs = self.distribute_progress_costs(
         self.actual_build_progress,
         phase_cost=self.build_cost,
         phase_start=self.actual_design_time,
@@ -578,9 +606,9 @@ class PDSystems:
         self.target_cost = np.zeros_like(self.actual_year, dtype=float)
         
         for actor in self.actors:
-            self.actual_design_costs[actor] = np.array(self.design_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            self.actual_design_costs[actor] = np.array(self.ipd_design_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.actual_cost += self.actual_design_costs[actor]
-            self.actual_build_costs[actor] = np.array(self.build_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            self.actual_build_costs[actor] = np.array(self.ipd_build_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.actual_cost += self.actual_build_costs[actor]  
         
         self.cumulative_actual_cost = np.cumsum(self.actual_cost)"""
@@ -745,10 +773,10 @@ class PDSystems:
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[actor][self.mask_om] = (self.OM_per_year * self.percent_OM_to[actor])
             
-            self.nondisc_costs[actor] = (self.design_costs[actor] + self.build_costs[actor] + self.om_costs[actor])
+            self.ipd_nondisc_costs[actor] = (self.ipd_design_costs[actor] + self.ipd_build_costs[actor] + self.om_costs[actor])
             
             self.ipd_disc_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
-            self.ipd_disc_costs[actor] = np.array(self.nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
+            self.ipd_disc_costs[actor] = np.array(self.ipd_nondisc_costs[actor] / ((1 + self.discount_rate) ** self.actual_year))
 
         # print("disc rev", self.ipd_disc_revenue)
         # print("disc costs", self.ipd_disc_costs)
@@ -756,30 +784,20 @@ class PDSystems:
         for actor in self.actors:
             self.ipd_disc_costs["utility"] += self.ipd_disc_revenue[actor]
 
-            self.net_disc[actor] = -self.ipd_disc_costs[actor] + self.ipd_disc_revenue[actor]
+            self.ipd_net_disc[actor] = np.zeros_like(self.actual_year, dtype=float)
+            self.ipd_net_disc[actor] = -self.ipd_disc_costs[actor] + self.ipd_disc_revenue[actor]
             
             if actor == "utility":
-                self.net_disc[actor] += self.ipd_disc_utility_revenue
+                self.ipd_net_disc[actor] += self.ipd_disc_utility_revenue
 
             #npv cumulative sums (NPV at each year)
-            self.NPV_timepath[actor] = np.cumsum(self.net_disc[actor])
+            self.ipd_NPV_timepath[actor] = np.cumsum(self.ipd_net_disc[actor])
             #cumulative costs
-            self.cost_timepath[actor] = np.cumsum(self.ipd_disc_costs[actor])
+            self.ipd_cost_timepath[actor] = np.cumsum(self.ipd_disc_costs[actor])
             #cumulative revenues
-            self.revenue_timepath[actor] = np.cumsum(self.ipd_disc_revenue[actor])
+            self.ipd_revenue_timepath[actor] = np.cumsum(self.ipd_disc_revenue[actor])
             
             # total NPV (end of timeline)
-            self.NPV[actor] = float(self.NPV_timepath[actor][-1])
+            self.NPV[actor] = float(self.ipd_NPV_timepath[actor][-1])
 
         self.project_NPV = sum(self.NPV.values())
-
-        #print("net disc", self.net_disc)
-        #print("IPD Utility NPV:    ", self.NPV["utility"])
-        #print("IPD total project NPV:", self.NPV)
-        
-        #print("IPD revenue starts (utility) at year:", (self.build_payout_year + self.commission_time) if self.build_payout_year is not None else None)
-
-        #self.NPVprint()
-        #self.print_npv_timepaths("IPD",self.NPV_timepath,"NPV")
-        #self.print_npv_timepaths("IPD",self.cost_timepath,"Costs")
-        #self.print_npv_timepaths("IPD",self.revenue_timepath,"Revenue")
