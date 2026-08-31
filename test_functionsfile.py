@@ -40,38 +40,24 @@ class TestPDSystems(unittest.TestCase):
         self.pd = PDSystems(inputs)
 
     def tearDown(self):
-        """Optional cleanup after each test."""
         pass
 
-    # ------------------------------------------------------------------
-    # Example test methods
-    # ------------------------------------------------------------------
+
 
     def test_completion_index(self):
-        # Arrange
         full_progress_array = np.array([0,10,20,100,10,20,50,100])
-
-        # Act
-        result = self.pd.completion_index(full_progress_array)
-
-        # Assert
+        result = self.pd.completion_index(full_progress_array) 
         expected = 3
         self.assertEqual(result, expected)
     
-    def test_completion_index_for_non_completion(self):
-        # Arrange
+    def test_completion_index_for_non_completion(self): 
         full_progress_array = np.array([0,10,20,30,40,50])
-
-        # Act
         result = self.pd.completion_index(full_progress_array)
-
-        # Assert
         expected = None
         self.assertEqual(result, expected)
     
     def test_build_completion_payout_year(self):
-        #Arrange
-        #Act
+        
         #actual_build_progress = [25,50,75,100], completes at idx=3
         #actual_design_time = len(actual_design_progress) = 4
         #idx=3, frac= (3+1)/4=1, year_within= ceil(1*actual_build_time)= max(1,4) = 4
@@ -81,7 +67,7 @@ class TestPDSystems(unittest.TestCase):
         actual_design_time = len(actual_design_progress)
         actual_build_time = len(actual_build_progress)
         result = self.pd.build_completion_payout_year(actual_build_progress,actual_design_time,actual_build_time)
-        #Assert
+
         expected = 8
         self.assertEqual(result, expected)
     
@@ -91,7 +77,6 @@ class TestPDSystems(unittest.TestCase):
         actual_design_time = len(actual_design_progress)
         actual_build_time = len(actual_build_progress)
         result = self.pd.build_completion_payout_year(actual_build_progress,actual_design_time,actual_build_time)
-        #Assert
         expected = None
         self.assertEqual(result, expected)
 
@@ -116,14 +101,7 @@ class TestPDSystems(unittest.TestCase):
         self.assertAlmostEqual(result["AE"][0], expected["AE"][0])
         self.assertAlmostEqual(result["AE"][1], expected["AE"][1])
     
-      #TODO: tests that behavior is as expected
-    #def test_project_NPVs_are_same(self):
-        #TODO: finish this
-        self.setUp()
-        #run all 3 PDSystems models: fixed price, IPD and cost+
-        #extract the NPVs for each actor
-        #sum them
-        #check they are all the same
+      
 
     """Fixed-price tests"""
 
