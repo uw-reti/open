@@ -784,7 +784,7 @@ class PDSystems:
             self.ipd_disc_costs["utility"] += self.ipd_disc_revenue[actor]
 
             self.ipd_net_disc[actor] = np.zeros_like(self.actual_year, dtype=float)
-            self.ipd_net_disc[actor] = -self.ipd_disc_costs[actor] + self.ipd_disc_revenue[actor]
+            self.ipd_net_disc[actor] = -self.ipd_disc_costs[actor] - self.ipd_disc_revenue[actor]
             
             if actor == "utility":
                 self.ipd_net_disc[actor] += self.ipd_disc_utility_revenue
