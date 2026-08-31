@@ -58,6 +58,7 @@ def row_to_inputs(row):
             "AE": f(row.iloc[19]),
             "constructor": f(row.iloc[20]),
             "utility": f(row.iloc[21]),
+            #"government": f(row.iloc[22]),
         },
         "percent_build": {
             "vendor": f(row.iloc[22]),
@@ -111,8 +112,8 @@ def run_models(inputs):
 def main():
     #you have to input your file route here for now.. will update when I ask/figure out how to upload one
     #input_csv = Path("test_inputs_copy.csv")
-    input_csv = Path("test_inputs.csv")
-    #input_csv = Path("cost_risk_inputs.csv")
+    #input_csv = Path("test_inputs.csv")
+    input_csv = Path("cost_risk_inputs.csv")
     #input_csv = Path(r"C:\Users\Veronica\Downloads\bl_inputs.csv")
     output_csv = input_csv.with_name(input_csv.stem + "_results.csv")
 

@@ -337,15 +337,15 @@ class PDSystems:
             self.fp_nondisc_revenue[actor]= np.zeros_like(self.actual_year, dtype=float)
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
 
-        self.ld_rate = 0.05 #need to make a variable later
+        # self.ld_rate = 0.05 #need to make a variable later
 
-        if self.build_payout_year is None:
-            delay = self.actual_build_time
-        else:
-            delay = max(0, self.build_payout_year - self.build_target_payout_year)
+        # if self.build_payout_year is None:
+        #     delay = self.actual_build_time
+        # else:
+        #     delay = max(0, self.build_payout_year - self.build_target_payout_year)
 
-        self.ld_penalty = 0    
-        self.ld_penalty = delay * self.ld_rate * self.target_build_cost
+        # self.ld_penalty = 0    
+        # self.ld_penalty = delay * self.ld_rate * self.target_build_cost
 
         for actor in self.actors:
             self.design_upfront_payout[actor] = (self.design_upfront * self.percent_design[actor])
@@ -377,11 +377,10 @@ class PDSystems:
             self.fp_design_payout_amount[actor] = (self.design_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             self.fp_build_payout_amount[actor] = (self.build_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
 
-            #liquidated damages
             if self.build_payout_year is not None:
-                penalty = self.ld_penalty * self.percent_build[actor]
-                self.fp_build_payout_amount[actor] -= penalty
-                self.fp_nondisc_revenue["utility"][self.build_payout_year] += penalty
+                # penalty = self.ld_penalty * self.percent_build[actor]
+                # self.fp_build_payout_amount[actor] -= penalty
+                # self.fp_nondisc_revenue["utility"][self.build_payout_year] += penalty
                 
                 self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
                 self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
@@ -470,8 +469,8 @@ class PDSystems:
         else:
             delay = max(0, self.build_payout_year - self.build_target_payout_year)
 
-        self.ld_penalty = 0
-        self.ld_penalty = delay * self.ld_rate * self.target_build_cost
+        # self.ld_penalty = 0
+        # self.ld_penalty = delay * self.ld_rate * self.target_build_cost
         
         self.cp_disc_revenue = {actor: np.zeros_like(self.actual_year, dtype=float) for actor in self.actors}
         self.cp_nondisc_revenue = {actor: np.zeros_like(self.actual_year, dtype=float) for actor in self.actors}
@@ -494,10 +493,10 @@ class PDSystems:
 
 
         for actor in self.actors:
-            if self.build_payout_year is not None:
-                penalty = self.ld_penalty * self.percent_build[actor]
-                self.cp_nondisc_revenue[actor][self.build_payout_year] -= penalty
-                self.cp_nondisc_revenue["utility"][self.build_payout_year] += penalty
+            # if self.build_payout_year is not None:
+            #     penalty = self.ld_penalty * self.percent_build[actor]
+            #     self.cp_nondisc_revenue[actor][self.build_payout_year] -= penalty
+            #     self.cp_nondisc_revenue["utility"][self.build_payout_year] += penalty
 
             self.cp_disc_revenue[actor] = np.array(self.cp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
             self.cp_disc_revenue[actor] *= self.markup
