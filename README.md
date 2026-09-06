@@ -1,2 +1,2 @@
 # open
-Open Architecture, Open Data, and Open Practices for Nuclear Development and Deployment
+A model for the impact of project delivery system on nuclear reactor cost and risk outcomes
