@@ -106,6 +106,7 @@ class PDSystems:
         self.cp_disc_revenue = {}
         self.cp_nondisc_operating_revenue = {}
         self.cp_disc_operating_revenue = {}
+        self.cp_disc_revenue_profit = {}
 
         self.nondisc_actual_costs = {}
         self.design_cost_variance = {}
@@ -349,7 +350,7 @@ class PDSystems:
             self.delay = max(0, self.build_payout_year - self.build_target_payout_year)
         # self.ld_penalty = 0    
         self.ld_penalty = self.delay * self.ld_rate * self.target_build_cost
-        print(f"liquidated penalty amount is: {self.ld_penalty}")
+        #print(f"liquidated penalty amount is: {self.ld_penalty}")
 
         for actor in self.actors:
             self.design_upfront_payout[actor] = (self.design_upfront * self.percent_design[actor])
@@ -389,8 +390,8 @@ class PDSystems:
                 self.penalty = self.ld_penalty * self.percent_build[actor] 
                 self.fp_build_payout_amount[actor] -= self.penalty
                 # self.fp_nondisc_revenue["utility"][self.build_payout_year] += penalty
-                print(f"build payout amount is: {self.fp_build_payout_amount}")
-                print(f"build penalty is: {self.penalty}")
+                #print(f"build payout amount is: {self.fp_build_payout_amount}")
+                #print(f"build penalty is: {self.penalty}")
                 
                 
                 self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
@@ -470,21 +471,27 @@ class PDSystems:
         
         #set the costplus markup
         self.markup = (1 + self.profit_margin)
+        #print(f"markup: {self.markup}")
 
         self.build_payout_year = self.build_completion_payout_year(self.actual_build_progress, self.actual_design_time, self.actual_build_time)
 
-        self.ld_rate = 0.05
+
 
         if self.build_payout_year is None:
-            delay = self.actual_build_time
+            self.delay = self.actual_build_time
         else:
-            delay = max(0, self.build_payout_year - self.build_target_payout_year)
-
+            self.delay = max(0, self.build_payout_year - self.build_target_payout_year)
+            if self.delay == 0:
+                self.ld_penalty = 1
+            else:
+                self.ld_penalty = 1 - (self.delay * self.ld_rate)  
         # self.ld_penalty = 0
-        # self.ld_penalty = delay * self.ld_rate * self.target_build_cost
+        #self.ld_penalty = self.delay * self.ld_rate  #self.target_build_cost
+        #print(f"liquidated penalty amount is: {self.ld_penalty}")
         
         self.cp_disc_revenue = {actor: np.zeros_like(self.actual_year, dtype=float) for actor in self.actors}
         self.cp_nondisc_revenue = {actor: np.zeros_like(self.actual_year, dtype=float) for actor in self.actors}
+
 
         for actor in self.actors:
             self.om_costs[actor] = np.zeros_like(self.actual_year, dtype=float)
@@ -510,7 +517,12 @@ class PDSystems:
             #     self.cp_nondisc_revenue["utility"][self.build_payout_year] += penalty
 
             self.cp_disc_revenue[actor] = np.array(self.cp_nondisc_revenue[actor] / ((1 + self.discount_rate) ** self.actual_year))
-            self.cp_disc_revenue[actor] *= self.markup
+            #print(f"discounted revenue per actor {self.cp_disc_revenue}")
+            self.cp_disc_revenue_profit[actor] = self.cp_disc_revenue[actor] * self.profit_margin * self.ld_penalty
+            #print(f"profit margin: {self.cp_disc_revenue_profit}")
+            #print(f"profit margin: {self.profit_margin}")
+            #print(f"liquidated percent: {self.ld_penalty}")
+            self.cp_disc_revenue[actor] += self.cp_disc_revenue_profit[actor] #self.markup
         
 
         for actor in self.actors: #need to break this line out, once the arrays have been formed
