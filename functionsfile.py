@@ -348,7 +348,8 @@ class PDSystems:
         else:
             self.delay = max(0, self.build_payout_year - self.build_target_payout_year)
         # self.ld_penalty = 0    
-        self.ld_penalty = self.delay * self.ld_rate #self.target_build_cost
+        self.ld_penalty = self.delay * self.ld_rate * self.target_build_cost
+        print(f"liquidated penalty amount is: {self.ld_penalty}")
 
         for actor in self.actors:
             self.design_upfront_payout[actor] = (self.design_upfront * self.percent_design[actor])
@@ -388,6 +389,9 @@ class PDSystems:
                 self.penalty = self.ld_penalty * self.percent_build[actor] 
                 self.fp_build_payout_amount[actor] -= self.penalty
                 # self.fp_nondisc_revenue["utility"][self.build_payout_year] += penalty
+                print(f"build payout amount is: {self.fp_build_payout_amount}")
+                print(f"build penalty is: {self.penalty}")
+                
                 
                 self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
                 self.fp_nondisc_revenue[actor][self.design_payout_year] += self.fp_design_payout_amount[actor]
