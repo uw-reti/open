@@ -32,6 +32,7 @@ class PDSystems:
         self.contingency = inputs["contingency"]
         self.ipd_contingency = inputs["ipd_contingency"]
         self.profit_margin = inputs["profit_margin"]
+        self.ld_rate = inputs["ld_rate"]
 
         self.actual_design_progress = np.array(inputs["actual_design_progress"])
         self.actual_build_progress = np.array(inputs["actual_build_progress"])
@@ -97,6 +98,9 @@ class PDSystems:
         self.disc_target_build_costs={}
         self.design_remaining_amount = {}
         self.build_remaining_amount = {}
+        self.delay = {}
+        self.ld_penalty = {}
+        self.penalty = {}
 
         self.cp_nondisc_revenue = {}
         self.cp_disc_revenue = {}
@@ -339,13 +343,12 @@ class PDSystems:
 
         # self.ld_rate = 0.05 #need to make a variable later
 
-        # if self.build_payout_year is None:
-        #     delay = self.actual_build_time
-        # else:
-        #     delay = max(0, self.build_payout_year - self.build_target_payout_year)
-
+        if self.build_payout_year is None:
+            self.delay = self.actual_build_time
+        else:
+            self.delay = max(0, self.build_payout_year - self.build_target_payout_year)
         # self.ld_penalty = 0    
-        # self.ld_penalty = delay * self.ld_rate * self.target_build_cost
+        self.ld_penalty = self.delay * self.ld_rate #self.target_build_cost
 
         for actor in self.actors:
             self.design_upfront_payout[actor] = (self.design_upfront * self.percent_design[actor])
@@ -364,10 +367,13 @@ class PDSystems:
             
             self.disc_om_costs[actor] = (self.om_costs[actor]) / ((1 + self.discount_rate) ** self.actual_year)
             self.fp_disc_costs[actor] = (self.disc_design_costs[actor] + self.disc_build_costs[actor] + self.disc_om_costs[actor])
-            
-            # self.design_remaining_amount[actor] = np.sum(self.disc_target_design_costs[actor]) - self.design_upfront_payout[actor]
-            # self.build_remaining_amount[actor] = np.sum(self.disc_target_build_costs[actor]) - self.build_upfront_payout[actor]
             self.design_remaining_amount[actor] = self.target_design_cost * 0.75 * self.percent_design[actor]
+
+
+
+            # self.design_remaining_amount[actor] = np.sum(self.disc_target_design_costs[actor]) - self.design_upfront_payout[actor]
+            # self.build_remaining_amount[actor] = np.sum(self.disc_target_build_costs[actor]) - self.build_upfront_payout[actor]           
+    
             self.build_remaining_amount[actor] = self.target_build_cost * 0.75 * self.percent_build[actor]
 
             #payouts per actor per phase
@@ -377,9 +383,10 @@ class PDSystems:
             self.fp_design_payout_amount[actor] = (self.design_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
             self.fp_build_payout_amount[actor] = (self.build_remaining_amount[actor]) * (1 + self.contingency) * (1 + self.profit_margin)
 
+            # if there's a difference between len(build_payout_year)-len(build_target_payout_year)
             if self.build_payout_year is not None:
-                # penalty = self.ld_penalty * self.percent_build[actor]
-                # self.fp_build_payout_amount[actor] -= penalty
+                self.penalty = self.ld_penalty * self.percent_build[actor] 
+                self.fp_build_payout_amount[actor] -= self.penalty
                 # self.fp_nondisc_revenue["utility"][self.build_payout_year] += penalty
                 
                 self.fp_nondisc_revenue[actor][0] += self.design_upfront_payout_amount[actor]
