@@ -23,8 +23,8 @@ pds = ("fixed_price", "cost_plus","ipd")
 
 
 def row_to_inputs(row):
-    if len(row) < 38:
-        raise ValueError("Each row needs 38 columns")
+    if len(row) < 39:
+        raise ValueError("Each row needs 39 columns")
 
     actual_design = [float(x) for x in row.iloc[14].split(",")]
     actual_build = [float(x) for x in row.iloc[15].split(",")]
@@ -84,6 +84,7 @@ def row_to_inputs(row):
             "constructor": f(row.iloc[36]),
             "utility": f(row.iloc[37]),
         },
+        "ld_rate": f(row.iloc[38]),
     }
 
 
@@ -113,13 +114,13 @@ def main():
     #this is where to change which inputs are plugged in
     #input_csv = Path("test_inputs_copy.csv")
     #input_csv = Path("test_inputs.csv")
-    input_csv = Path("cost_risk_inputs.csv")
+    input_csv = Path("experimenting_inputs.csv")
     #input_csv = Path(r"C:\Users\Veronica\Downloads\bl_inputs.csv")
     output_csv = input_csv.with_name(input_csv.stem + "_results.csv")
 
     df = pd.read_csv(input_csv, dtype=str, keep_default_na=False)
-    if df.shape[1] < 38:
-        print(f"Error: run needs 38 columns, found {df.shape[1]}.")
+    if df.shape[1] < 39:
+        print(f"Error: run needs 39 columns, found {df.shape[1]}.")
         sys.exit(1)
 
     results = []
