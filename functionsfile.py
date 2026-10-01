@@ -101,6 +101,7 @@ class PDSystems:
         self.delay = {}
         self.ld_penalty = {}
         self.penalty = {}
+        self.ld_percent = {}
 
         self.cp_nondisc_revenue = {}
         self.cp_disc_revenue = {}
@@ -349,7 +350,8 @@ class PDSystems:
         else:
             self.delay = max(0, self.build_payout_year - self.build_target_payout_year)
         # self.ld_penalty = 0    
-        self.ld_penalty = self.delay * self.ld_rate * self.target_build_cost
+        self.ld_percent = min(0.10, self.delay * self.ld_rate)
+        self.ld_penalty = self.ld_percent * self.target_build_cost
         #print(f"liquidated penalty amount is: {self.ld_penalty}")
 
         for actor in self.actors:
@@ -481,10 +483,8 @@ class PDSystems:
             self.delay = self.actual_build_time
         else:
             self.delay = max(0, self.build_payout_year - self.build_target_payout_year)
-            if self.delay == 0:
-                self.ld_penalty = 1
-            else:
-                self.ld_penalty = 1 - (self.delay * self.ld_rate)  
+            self.ld_percent = min(0.10, self.delay * self.ld_rate)     #0.10 represents the cap on liqudated damages 
+            self.ld_penalty = 1 - self.ld_percent 
         # self.ld_penalty = 0
         #self.ld_penalty = self.delay * self.ld_rate  #self.target_build_cost
         #print(f"liquidated penalty amount is: {self.ld_penalty}")
